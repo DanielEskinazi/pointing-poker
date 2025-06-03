@@ -1,5 +1,17 @@
 import { create } from 'zustand';
 import type { CardValue, GameState, Player } from './types';
+import type { 
+  ConnectionStatus, 
+  PlayerJoinedData, 
+  PlayerLeftData, 
+  PlayerUpdatedData,
+  VoteSubmittedData,
+  CardsRevealedData,
+  StoryUpdatedData,
+  TimerUpdatedData,
+  SessionStateData
+} from './types/websocket';
+import { persist, clearPersistedState } from './store/middleware/persistence';
 
 interface GameStore extends GameState {
   addPlayer: (player: Player) => void;
@@ -13,6 +25,29 @@ interface GameStore extends GameState {
   joinSession: (sessionId: string) => void;
   createSession: () => string;
   sessionId: string | null;
+  
+  // Connection management
+  connectionStatus: ConnectionStatus;
+  connectionError: string | null;
+  lastSync: Date | null;
+  setConnectionStatus: (status: ConnectionStatus) => void;
+  setConnectionError: (error: string | null) => void;
+  updateLastSync: () => void;
+  
+  // WebSocket event handlers
+  handlePlayerJoined: (data: PlayerJoinedData) => void;
+  handlePlayerLeft: (data: PlayerLeftData) => void;
+  handlePlayerUpdated: (data: PlayerUpdatedData) => void;
+  handleVoteSubmitted: (data: VoteSubmittedData) => void;
+  handleCardsRevealed: (data: CardsRevealedData) => void;
+  handleGameReset: (data?: unknown) => void;
+  handleStoryUpdated: (data: StoryUpdatedData) => void;
+  handleTimerUpdated: (data: TimerUpdatedData) => void;
+  handleSessionState: (data: SessionStateData) => void;
+  
+  // Persistence methods
+  clearSession: () => void;
+  syncState: (data: Partial<GameState>) => void;
 }
 
 const initialState: GameState = {
@@ -24,12 +59,16 @@ const initialState: GameState = {
   isConfigured: false,
 };
 
-// Create a broadcast channel for real-time updates
-const channel = new BroadcastChannel('planning-poker');
-
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set) => ({
   ...initialState,
   sessionId: null,
+  
+  // Connection state
+  connectionStatus: 'disconnected',
+  connectionError: null,
+  lastSync: null,
 
   createSession: () => {
     const sessionId = crypto.randomUUID();
@@ -42,40 +81,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   addPlayer: (player) => {
-    const state = get();
-    const newState = {
-      players: [...state.players, player]
-    };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+    set(state => ({
+      players: [...state.players, player],
+      lastSync: new Date()
+    }));
   },
 
   selectCard: (playerId, card) => {
-    const state = get();
-    const newState = {
+    set(state => ({
       players: state.players.map((p) =>
         p.id === playerId ? { ...p, selectedCard: card } : p
-      )
-    };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+      ),
+      lastSync: new Date()
+    }));
   },
 
   revealCards: () => {
-    const state = get();
-    if (!state.isRevealing) {
-      const newState = {
-        isRevealing: true,
-        players: state.players.map((p) => ({ ...p, isRevealed: true }))
-      };
-      set(newState);
-      channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
-    }
+    set(state => {
+      if (!state.isRevealing) {
+        return {
+          isRevealing: true,
+          players: state.players.map((p) => ({ ...p, isRevealed: true })),
+          lastSync: new Date()
+        };
+      }
+      return state;
+    });
   },
 
   resetGame: () => {
-    const state = get();
-    const newState = {
+    set(state => ({
       isRevealing: false,
       timer: initialState.timer,
       currentStory: initialState.currentStory,
@@ -83,45 +118,227 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...p,
         selectedCard: null,
         isRevealed: false,
-      }))
-    };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+      })),
+      lastSync: new Date()
+    }));
   },
 
   setTimer: (time) => {
-    const state = get();
-    const newState = { timer: time };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+    set({ timer: time, lastSync: new Date() });
   },
 
   setCurrentStory: (story) => {
-    const state = get();
-    const newState = { currentStory: story };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+    set({ currentStory: story, lastSync: new Date() });
   },
 
   setCardValues: (values) => {
-    const state = get();
-    const newState = { cardValues: values };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+    set({ cardValues: values, lastSync: new Date() });
   },
 
   setIsConfigured: (value) => {
-    const state = get();
-    const newState = { isConfigured: value };
-    set(newState);
-    channel.postMessage({ type: 'UPDATE_STATE', state: newState, sessionId: state.sessionId });
+    set({ isConfigured: value, lastSync: new Date() });
   },
-}));
 
-// Listen for updates from other tabs/windows
-channel.onmessage = (event) => {
-  const { type, state, sessionId } = event.data;
-  if (type === 'UPDATE_STATE' && useGameStore.getState().sessionId === sessionId) {
-    useGameStore.setState(state);
+  // Connection management
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
+  setConnectionError: (error) => set({ connectionError: error }),
+  updateLastSync: () => set({ lastSync: new Date() }),
+
+  // WebSocket event handlers
+  handlePlayerJoined: (data: PlayerJoinedData) => {
+    set(state => {
+      // Don't add if player already exists
+      const existingPlayer = state.players.find(p => p.id === data.player.id);
+      if (existingPlayer) {
+        return state;
+      }
+      
+      return {
+        players: [...state.players, {
+          id: data.player.id,
+          name: data.player.name,
+          avatar: data.player.avatar,
+          selectedCard: null,
+          isRevealed: false,
+          isSpectator: data.player.isSpectator
+        }],
+        lastSync: new Date()
+      };
+    });
+  },
+
+  handlePlayerLeft: (data: PlayerLeftData) => {
+    set(state => ({
+      players: state.players.filter(p => p.id !== data.playerId),
+      lastSync: new Date()
+    }));
+  },
+
+  handlePlayerUpdated: (data: PlayerUpdatedData) => {
+    set(state => ({
+      players: state.players.map(p =>
+        p.id === data.player.id ? {
+          ...p,
+          name: data.player.name,
+          avatar: data.player.avatar,
+          isSpectator: data.player.isSpectator
+        } : p
+      ),
+      lastSync: new Date()
+    }));
+  },
+
+  handleVoteSubmitted: (data: VoteSubmittedData) => {
+    set(state => ({
+      players: state.players.map(p =>
+        p.id === data.playerId
+          ? { ...p, selectedCard: data.hasVoted ? (p.selectedCard || '?') : null }
+          : p
+      ),
+      lastSync: new Date()
+    }));
+  },
+
+  handleCardsRevealed: (data: CardsRevealedData) => {
+    set(state => ({
+      isRevealing: true,
+      players: state.players.map(p => {
+        const vote = data.votes.find(v => v.playerId === p.id);
+        return {
+          ...p,
+          selectedCard: vote?.value as CardValue || p.selectedCard,
+          isRevealed: true
+        };
+      }),
+      lastSync: new Date()
+    }));
+  },
+
+  handleGameReset: () => {
+    set(state => ({
+      isRevealing: false,
+      timer: initialState.timer,
+      currentStory: initialState.currentStory,
+      players: state.players.map(p => ({
+        ...p,
+        selectedCard: null,
+        isRevealed: false
+      })),
+      lastSync: new Date()
+    }));
+  },
+
+  handleStoryUpdated: (data: StoryUpdatedData) => {
+    set({
+      currentStory: data.story.title,
+      lastSync: new Date()
+    });
+  },
+
+  handleTimerUpdated: (data: TimerUpdatedData) => {
+    set({
+      timer: data.timer.remainingTime,
+      lastSync: new Date()
+    });
+  },
+
+  handleSessionState: (data: SessionStateData | any) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Store][${timestamp}] handleSessionState called with:`, {
+      dataKeys: Object.keys(data),
+      playersCount: data.players?.length,
+      hasConfig: !!data.config,
+      configKeys: data.config ? Object.keys(data.config) : [],
+      cardValues: data.config?.cardValues,
+      fullData: data
+    });
+    
+    if ('players' in data && Array.isArray(data.players)) {
+      console.log(`[Store][${timestamp}] Processing players:`, data.players.length, data.players);
+      console.log(`[Store][${timestamp}] Session config received:`, data.config);
+      
+      const updates: any = {
+        players: data.players.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar,
+          selectedCard: null,
+          isRevealed: false,
+          isSpectator: p.isSpectator || false
+        })),
+        currentStory: data.currentStory?.title,
+        timer: data.timer?.remainingTime || data.timer?.duration || 60,
+        lastSync: new Date()
+      };
+
+      // Update card values if provided in session config
+      if (data.config?.cardValues && data.config.cardValues.length > 0) {
+        const cardValues = data.config.cardValues.map((v: string) => 
+          isNaN(Number(v)) ? v : Number(v)
+        );
+        updates.cardValues = cardValues;
+        updates.isConfigured = true;
+        console.log(`[Store][${timestamp}] Updated card values from WebSocket:`, cardValues);
+      } else {
+        console.log(`[Store][${timestamp}] No valid card values in config:`, {
+          hasConfig: !!data.config,
+          hasCardValues: !!data.config?.cardValues,
+          cardValuesLength: data.config?.cardValues?.length,
+          cardValues: data.config?.cardValues
+        });
+      }
+
+      console.log(`[Store][${timestamp}] Applying updates:`, updates);
+      set(state => ({
+        ...state,
+        ...updates
+      }));
+    } else {
+      console.log(`[Store][${timestamp}] No players array found in session state data`);
+    }
+  },
+
+  // Persistence methods
+  clearSession: async () => {
+    await clearPersistedState();
+    set({
+      ...initialState,
+      sessionId: null,
+      connectionStatus: 'disconnected',
+      connectionError: null,
+      lastSync: null
+    });
+  },
+
+  syncState: (data: Partial<GameState>) => {
+    set({
+      ...data,
+      lastSync: new Date()
+    });
   }
-};
+}),
+{
+  name: 'planning-poker-store',
+  partialize: (state) => ({
+    session: {
+      id: state.sessionId,
+      config: {
+        cardValues: state.cardValues,
+        isConfigured: state.isConfigured
+      }
+    },
+    game: {
+      currentStory: state.currentStory,
+      isRevealing: state.isRevealing,
+      timer: state.timer,
+      players: state.players
+    },
+    ui: {}
+  }),
+  onRehydrateStorage: () => (state) => {
+    if (state) {
+      console.log('State rehydrated successfully');
+    }
+  }
+}
+));
