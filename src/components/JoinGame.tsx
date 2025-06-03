@@ -2,25 +2,60 @@ import { useState } from 'react';
 import { User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
+import { useJoinSession } from '../hooks/api/useSession';
 
 const AVATARS = ['👩‍💻', '👨‍💻', '🧙‍♂️', '🦄', '🚀', '🎮', '🤖', '🦸‍♂️'];
 
-export function JoinGame() {
+interface JoinGameProps {
+  sessionId: string;
+  onJoin: (playerId: string) => void;
+}
+
+export function JoinGame({ sessionId, onJoin }: JoinGameProps) {
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
+  const [isJoining, setIsJoining] = useState(false);
   const addPlayer = useGameStore((state) => state.addPlayer);
+  const joinSession = useJoinSession();
 
-  const handleJoin = (e: React.FormEvent) => {
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
+    if (!name.trim() || !sessionId) return;
+
+    setIsJoining(true);
+    try {
+      const result = await joinSession.mutateAsync({
+        sessionId,
+        playerName: name.trim(),
+        avatar: selectedAvatar
+      });
+
+      // Add player to local state using form data since API doesn't return full player object
+      const playerId = result.data.playerId;
       addPlayer({
-        id: crypto.randomUUID(),
+        id: playerId,
         name: name.trim(),
         avatar: selectedAvatar,
         selectedCard: null,
         isRevealed: false,
+        isSpectator: false
       });
+
+      // Store player ID
+      localStorage.setItem(`player_${sessionId}`, playerId);
+      
+      // Delay to ensure DB transaction is committed before WebSocket connection
+      setTimeout(() => {
+        onJoin(playerId);
+      }, 500);
+      
       setName('');
+    } catch (error: any) {
+      console.error('Failed to join session:', error);
+      const message = error.response?.data?.message || 'Failed to join session';
+      alert(message);
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -44,6 +79,7 @@ export function JoinGame() {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter your name"
             required
+            disabled={isJoining}
           />
         </div>
         <div>
@@ -60,7 +96,8 @@ export function JoinGame() {
                   selectedAvatar === avatar
                     ? 'bg-blue-100 ring-2 ring-blue-500'
                     : 'hover:bg-gray-100'
-                }`}
+                } ${isJoining ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isJoining}
               >
                 {avatar}
               </button>
@@ -69,9 +106,10 @@ export function JoinGame() {
         </div>
         <button
           type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
+          disabled={isJoining}
         >
-          Join Game
+          {isJoining ? 'Joining...' : 'Join Game'}
         </button>
       </form>
     </motion.div>
