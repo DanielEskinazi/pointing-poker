@@ -271,6 +271,8 @@ export class SessionService {
         });
       } else {
         // Create new player
+        logger.info('Creating new player in database', { sessionId, name: data.name });
+        
         player = await db.getPrisma().player.create({
           data: {
             sessionId,
@@ -279,6 +281,24 @@ export class SessionService {
             isSpectator: data.isSpectator || false,
             isActive: true
           }
+        });
+        
+        logger.info('Player created successfully', { 
+          sessionId, 
+          playerId: player.id,
+          name: player.name
+        });
+        
+        // Verify player was created by querying it
+        const verifyPlayer = await db.getPrisma().player.findUnique({
+          where: { id: player.id }
+        });
+        
+        logger.info('Player verification after create', {
+          sessionId,
+          playerId: player.id,
+          found: !!verifyPlayer,
+          playerName: verifyPlayer?.name
         });
       }
 

@@ -20,6 +20,10 @@ export class WebSocketClient {
       this.disconnect();
     }
     
+    // Reset connection state
+    this.reconnectAttempts = 0;
+    this.isConnected = false;
+    
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
     
     console.log('Connecting to WebSocket', {
@@ -84,9 +88,19 @@ export class WebSocketClient {
       console.error(`[WebSocket][${timestamp}] Connection error:`, error.message);
       this.reconnectAttempts++;
       
+      // Log full error details
+      console.log(`[WebSocket][${timestamp}] Full error details:`, {
+        message: error.message,
+        type: error.type,
+        data: error.data
+      });
+      
       // If it's an authentication error and we haven't tried too many times, retry with delay
-      if (error.message.includes('Authentication failed') && this.reconnectAttempts <= 3) {
-        console.log(`[WebSocket][${timestamp}] Authentication failed, likely race condition. Retrying in ${this.reconnectAttempts * 1000}ms...`);
+      if ((error.message.includes('Authentication failed') || 
+           error.message.includes('Player not found') ||
+           error.message.includes('not found in database')) && 
+          this.reconnectAttempts <= 3) {
+        console.log(`[WebSocket][${timestamp}] Authentication/Player verification failed, likely race condition. Retrying in ${this.reconnectAttempts * 1000}ms...`);
         useGameStore.getState().setConnectionStatus('reconnecting');
         
         setTimeout(() => {
@@ -225,10 +239,14 @@ export class WebSocketClient {
   
   disconnect() {
     if (this.socket) {
+      // Remove all listeners before disconnecting
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
     this.isConnected = false;
+    this.reconnectAttempts = 0;
+    this.eventQueue = [];
   }
 
   isSocketConnected(): boolean {

@@ -45,8 +45,8 @@ export default function App() {
   // Fetch session data from API
   const { data: sessionData, isLoading: isSessionLoading, error: sessionError } = useSession(sessionId || '');
   
-  // Initialize WebSocket connection
-  const { connected, emit } = useWebSocket();
+  // Initialize WebSocket connection with playerId
+  const { connected, emit } = useWebSocket(playerId);
 
   const currentPlayer = players.find(p => p.id === playerId);
   const shareUrl = sessionId ? `${window.location.origin}?session=${sessionId}` : '';

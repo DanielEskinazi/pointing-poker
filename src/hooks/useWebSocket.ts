@@ -3,100 +3,130 @@ import { wsClient } from '../services/websocket/client';
 import { useGameStore } from '../store';
 import { offlineQueue } from '../services/websocket/offlineQueue';
 
-export const useWebSocket = () => {
-  const { sessionId, connectionStatus, players } = useGameStore();
+export const useWebSocket = (playerId: string | null) => {
+  const { sessionId, connectionStatus } = useGameStore();
   const connectedRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
-  
-  // Get current player ID from localStorage if available
-  const getPlayerId = () => {
-    if (!sessionId) return null;
-    return localStorage.getItem(`player_${sessionId}`);
-  };
+  const lastPlayerIdRef = useRef<string | null>(null);
   
   // Get authentication token from localStorage
   const getAuthToken = () => {
     return localStorage.getItem('auth_token');
   };
   
-  // Extract playerId as a reactive value
-  const playerId = getPlayerId();
-  
   useEffect(() => {
-    const timestamp = new Date().toISOString();
-    console.log(`[WebSocket][${timestamp}] useEffect triggered:`, { 
-      sessionId, 
-      playerId,
-      hasSessionId: !!sessionId,
-      hasPlayerId: !!playerId,
-      lastSessionId: lastSessionIdRef.current,
-      sessionChanged: sessionId !== lastSessionIdRef.current
-    });
+    let mounted = true;
     
-    // Skip if sessionId hasn't actually changed
-    if (sessionId === lastSessionIdRef.current) {
-      console.log(`[WebSocket][${timestamp}] SessionId unchanged, skipping`);
-      return;
-    }
-    
-    // Update the last known sessionId
-    lastSessionIdRef.current = sessionId;
-    
-    if (!sessionId) {
-      console.log(`[WebSocket][${timestamp}] No sessionId, skipping connection`);
-      // Disconnect if we had a connection
-      if (connectedRef.current) {
-        console.log(`[WebSocket][${timestamp}] Disconnecting due to null sessionId`);
+    const connectWebSocket = async () => {
+      const timestamp = new Date().toISOString();
+      console.log(`[WebSocket][${timestamp}] useEffect triggered:`, { 
+        sessionId, 
+        playerId,
+        hasSessionId: !!sessionId,
+        hasPlayerId: !!playerId,
+        lastSessionId: lastSessionIdRef.current,
+        lastPlayerId: lastPlayerIdRef.current,
+        sessionChanged: sessionId !== lastSessionIdRef.current,
+        playerChanged: playerId !== lastPlayerIdRef.current,
+        isConnected: connectedRef.current,
+        wsClientConnected: wsClient.isSocketConnected()
+      });
+      
+      // Check if we need to connect/reconnect
+      const shouldConnect = sessionId !== lastSessionIdRef.current || 
+                           playerId !== lastPlayerIdRef.current ||
+                           (playerId && !connectedRef.current);
+      
+      if (!shouldConnect) {
+        console.log(`[WebSocket][${timestamp}] No changes detected and already connected, skipping`);
+        return;
+      }
+      
+      // Update the last known values
+      lastSessionIdRef.current = sessionId;
+      lastPlayerIdRef.current = playerId;
+      
+      if (!sessionId) {
+        console.log(`[WebSocket][${timestamp}] No sessionId, skipping connection`);
+        // Disconnect if we had a connection
+        if (connectedRef.current) {
+          console.log(`[WebSocket][${timestamp}] Disconnecting due to null sessionId`);
+          wsClient.disconnect();
+          connectedRef.current = false;
+        }
+        return;
+      }
+      
+      const token = getAuthToken();
+      
+      console.log(`[WebSocket][${timestamp}] Connection check:`, { 
+        playerId, 
+        hasToken: !!token, 
+        connectedRef: connectedRef.current,
+        connectionStatus 
+      });
+      
+      // Only connect if we have a player ID (meaning user has joined the session)
+      if (!playerId) {
+        console.log(`[WebSocket][${timestamp}] No playerId found, waiting for user to join session`);
+        // Disconnect if we had a connection
+        if (connectedRef.current) {
+          console.log(`[WebSocket][${timestamp}] Disconnecting due to null playerId`);
+          wsClient.disconnect();
+          connectedRef.current = false;
+        }
+        return;
+      }
+      
+      // Disconnect any existing connection when playerId changes or reconnecting
+      if (connectedRef.current || wsClient.isSocketConnected()) {
+        console.log(`[WebSocket][${timestamp}] Disconnecting existing connection before reconnecting`);
         wsClient.disconnect();
         connectedRef.current = false;
+        useGameStore.getState().setConnectionStatus('disconnected');
+        // Small delay to ensure clean disconnect
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-      return;
-    }
+      
+      if (!mounted) return;
+      
+      connectedRef.current = true;
+      console.log(`[WebSocket][${timestamp}] Starting WebSocket connection...`);
+      
+      // Set connecting status
+      useGameStore.getState().setConnectionStatus('connecting');
+      
+      // Get current player info for authentication from store at connection time
+      const players = useGameStore.getState().players;
+      const currentPlayer = players.find(p => p.id === playerId);
+      console.log(`[WebSocket][${timestamp}] Current player found:`, !!currentPlayer, currentPlayer?.name);
+      
+      // Connect with minimal delay to ensure state is settled
+      setTimeout(() => {
+        if (mounted && playerId && sessionId) {
+          console.log(`[WebSocket][${timestamp}] Connecting to WebSocket...`, {
+            sessionId,
+            playerId,
+            playerName: currentPlayer?.name,
+            hasToken: !!token
+          });
+          wsClient.connect(sessionId, playerId, token || '', currentPlayer);
+        } else {
+          console.log(`[WebSocket][${timestamp}] Skipping connection - component unmounted or missing data`);
+        }
+      }, 100);
+    };
     
-    const token = getAuthToken();
-    
-    console.log(`[WebSocket][${timestamp}] Connection check:`, { 
-      playerId, 
-      hasToken: !!token, 
-      connectedRef: connectedRef.current,
-      connectionStatus 
-    });
-    
-    // Only connect if we have a player ID (meaning user has joined the session)
-    if (!playerId) {
-      console.log(`[WebSocket][${timestamp}] No playerId found, waiting for user to join session`);
-      return;
-    }
-    
-    // Prevent duplicate connections
-    if (connectedRef.current) {
-      console.log(`[WebSocket][${timestamp}] Already connected, skipping duplicate connection`);
-      return;
-    }
-    
-    connectedRef.current = true;
-    console.log(`[WebSocket][${timestamp}] Starting WebSocket connection...`);
-    
-    // Set connecting status
-    useGameStore.getState().setConnectionStatus('connecting');
-    
-    // Get current player info for authentication (use a stable reference)
-    const currentPlayer = players.find(p => p.id === playerId);
-    console.log(`[WebSocket][${timestamp}] Current player found:`, !!currentPlayer, currentPlayer?.name);
-    
-    // Since playerId dependency ensures player exists, connect immediately with small delay
-    setTimeout(() => {
-      console.log(`[WebSocket][${timestamp}] Connecting to WebSocket (playerId confirmed)...`);
-      wsClient.connect(sessionId, playerId, token || '', currentPlayer);
-    }, 300);
+    connectWebSocket();
     
     return () => {
+      mounted = false;
       const cleanupTimestamp = new Date().toISOString();
       console.log(`[WebSocket][${cleanupTimestamp}] Cleanup: disconnecting WebSocket`);
       connectedRef.current = false;
       wsClient.disconnect();
     };
-  }, [sessionId, playerId]); // Depend on both sessionId and playerId
+  }, [sessionId, playerId]); // Only depend on sessionId and playerId, not players
 
   // Handle offline queue when reconnecting
   useEffect(() => {

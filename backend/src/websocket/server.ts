@@ -108,6 +108,42 @@ export class WebSocketServer {
           return next(new Error('Session has expired'));
         }
 
+        // If playerId is provided, verify player exists with retry logic
+        if (playerId) {
+          let player = null;
+          const maxRetries = 3;
+          const retryDelay = 500; // 500ms between retries
+
+          for (let i = 0; i < maxRetries; i++) {
+            player = await db.getPrisma().player.findUnique({
+              where: { id: playerId }
+            });
+
+            if (player) {
+              // Verify player belongs to this session
+              if (player.sessionId !== sessionId) {
+                return next(new Error('Player does not belong to this session'));
+              }
+              break;
+            }
+
+            // If not the last retry, wait before trying again
+            if (i < maxRetries - 1) {
+              logger.info(`Player not found on attempt ${i + 1}, retrying in ${retryDelay}ms...`, {
+                playerId,
+                sessionId,
+                attempt: i + 1
+              });
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+          }
+
+          if (!player) {
+            logger.error('Player not found after retries', { playerId, sessionId });
+            return next(new Error('Player not found in database'));
+          }
+        }
+
         // Store session info in socket
         socket.data = {
           sessionId,

@@ -44,10 +44,8 @@ export function JoinGame({ sessionId, onJoin }: JoinGameProps) {
       // Store player ID
       localStorage.setItem(`player_${sessionId}`, playerId);
       
-      // Delay to ensure DB transaction is committed before WebSocket connection
-      setTimeout(() => {
-        onJoin(playerId);
-      }, 500);
+      // Call onJoin immediately - backend has retry logic to handle race conditions
+      onJoin(playerId);
       
       setName('');
     } catch (error: any) {
