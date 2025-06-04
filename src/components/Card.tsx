@@ -16,10 +16,8 @@ interface CardProps {
 
 export function Card({ value, isSelected, isRevealed, onClick, playerId, disabled }: CardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { submitVote, voting, getCurrentStory } = useGameStore();
+  const { submitVote, voting } = useGameStore();
   const { showToast } = useToast();
-  
-  const currentStory = getCurrentStory();
   const canVote = !disabled && !voting.isRevealed && !isSubmitting;
   const variants = {
     hidden: { 

@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
-import type { CardValue } from '../types';
 
 export const VotingResults = () => {
   const { 

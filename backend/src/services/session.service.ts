@@ -12,8 +12,21 @@ import {
   SessionResponse,
   PlayerResponse,
   CreateSessionResponse,
-  JoinSessionResponse
+  JoinSessionResponse,
+  SessionConfig
 } from '../types/api';
+import { Prisma, Player } from '@prisma/client';
+
+// Extended session config to include runtime state
+interface ExtendedSessionConfig extends SessionConfig {
+  cardsRevealed?: boolean;
+}
+
+
+type SessionUpdateData = {
+  name?: string;
+  config?: Prisma.InputJsonValue;
+};
 
 // Global WebSocket server instance (injected from main server)
 let wsServer: WebSocketServer | null = null;
@@ -45,7 +58,7 @@ export class SessionService {
           id: sessionId,
           name: data.name,
           passwordHash,
-          config: data.config as any,
+          config: data.config as unknown as Prisma.InputJsonValue,
           expiresAt,
           isActive: true
         }
@@ -80,7 +93,7 @@ export class SessionService {
         id: session.id,
         name: session.name,
         hostId: session.hostId!,
-        config: session.config as any,
+        config: session.config as unknown as ExtendedSessionConfig,
         isActive: session.isActive,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
@@ -131,9 +144,9 @@ export class SessionService {
         id: session.id,
         name: session.name,
         hostId: session.hostId!,
-        config: session.config as any,
+        config: session.config as unknown as ExtendedSessionConfig,
         isActive: session.isActive,
-        cardsRevealed: (session.config as any)?.cardsRevealed || false,
+        cardsRevealed: (session.config as unknown as ExtendedSessionConfig)?.cardsRevealed || false,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
         players: session.players.map(this.mapPlayerToResponse),
@@ -148,7 +161,7 @@ export class SessionService {
 
   async updateSession(sessionId: string, data: UpdateSessionDto): Promise<SessionResponse> {
     try {
-      const updateData: any = {};
+      const updateData: SessionUpdateData = {};
 
       if (data.name) {
         updateData.name = data.name;
@@ -165,9 +178,9 @@ export class SessionService {
         }
 
         updateData.config = {
-          ...currentSession.config as any,
+          ...currentSession.config as unknown as ExtendedSessionConfig,
           ...data.config
-        } as any;
+        } as unknown as Prisma.InputJsonValue;
       }
 
       const session = await db.getPrisma().session.update({
@@ -187,9 +200,9 @@ export class SessionService {
         id: session.id,
         name: session.name,
         hostId: session.hostId!,
-        config: session.config as any,
+        config: session.config as unknown as ExtendedSessionConfig,
         isActive: session.isActive,
-        cardsRevealed: (session.config as any)?.cardsRevealed || false,
+        cardsRevealed: (session.config as unknown as ExtendedSessionConfig)?.cardsRevealed || false,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
         players: session.players.map(this.mapPlayerToResponse),
@@ -349,7 +362,7 @@ export class SessionService {
     }
   }
 
-  private mapPlayerToResponse(player: any): PlayerResponse {
+  private mapPlayerToResponse(player: Player): PlayerResponse {
     return {
       id: player.id,
       name: player.name,

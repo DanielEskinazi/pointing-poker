@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
 import { useJoinSession } from '../hooks/api/useSession';
@@ -48,9 +47,11 @@ export function JoinGame({ sessionId, onJoin }: JoinGameProps) {
       onJoin(playerId);
       
       setName('');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to join session:', error);
-      const message = error.response?.data?.message || 'Failed to join session';
+      const message = error instanceof Error && 'response' in error 
+        ? (error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to join session'
+        : 'Failed to join session';
       alert(message);
     } finally {
       setIsJoining(false);

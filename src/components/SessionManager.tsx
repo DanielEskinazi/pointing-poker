@@ -8,7 +8,7 @@ export function SessionManager() {
   const { sessionId, createSession, joinSession } = useGameStore();
 
   const handleCreateSession = () => {
-    const newSessionId = createSession();
+    createSession();
     setShowShareLink(true);
   };
 

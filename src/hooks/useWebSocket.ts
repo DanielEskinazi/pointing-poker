@@ -119,7 +119,8 @@ export const useWebSocket = (playerId: string | null) => {
       connectedRef.current = false;
       wsClient.disconnect();
     };
-  }, [sessionId, playerId]); // Only depend on sessionId and playerId, not players
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, playerId]); // Only depend on sessionId and playerId, not players or connectionStatus (using getState directly)
 
   // Handle offline queue when reconnecting
   useEffect(() => {

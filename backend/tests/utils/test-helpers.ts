@@ -51,7 +51,7 @@ export class TestDataFactory {
         id: sessionData.id,
         name: sessionData.name,
         hostId: sessionData.hostId,
-        config: sessionData.config as any,
+        config: sessionData.config as SessionConfig,
         passwordHash: sessionData.passwordHash,
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48 hours
         isActive: true
@@ -149,7 +149,7 @@ export class TestDataFactory {
 
   static async createPlayerSession(): Promise<{session: TestSession, player: TestPlayer, playerToken: string}> {
     const session = await this.createTestSession();
-    const host = await this.createTestPlayer(session.id, { id: session.hostId });
+    await this.createTestPlayer(session.id, { id: session.hostId });
     const player = await this.createTestPlayer(session.id, { name: 'Regular Player' });
     const playerToken = this.generateTestToken(player.id, session.id, false);
 
@@ -158,7 +158,7 @@ export class TestDataFactory {
 
   static async createSpectatorSession(): Promise<{session: TestSession, spectator: TestPlayer, spectatorToken: string}> {
     const session = await this.createTestSession();
-    const host = await this.createTestPlayer(session.id, { id: session.hostId });
+    await this.createTestPlayer(session.id, { id: session.hostId });
     const spectator = await this.createTestPlayer(session.id, { 
       name: 'Spectator Player',
       isSpectator: true 

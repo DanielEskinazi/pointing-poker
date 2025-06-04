@@ -39,7 +39,7 @@ export class VotingController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to submit vote');
+      this.handleError(error as Error, res, 'Failed to submit vote');
     }
   };
 
@@ -85,7 +85,7 @@ export class VotingController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to get votes');
+      this.handleError(error as Error, res, 'Failed to get votes');
     }
   };
 
@@ -106,7 +106,7 @@ export class VotingController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to reveal cards');
+      this.handleError(error as Error, res, 'Failed to reveal cards');
     }
   };
 
@@ -124,18 +124,18 @@ export class VotingController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to reset game');
+      this.handleError(error as Error, res, 'Failed to reset game');
     }
   };
 
-  private handleError(error: any, res: Response, defaultMessage: string): void {
+  private handleError(error: Error, res: Response, defaultMessage: string): void {
     logger.error(defaultMessage, { error: error.message, stack: error.stack });
     
     if (error.name === 'ValidationError') {
       res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.details
+        details: (error as any).details
       });
       return;
     }

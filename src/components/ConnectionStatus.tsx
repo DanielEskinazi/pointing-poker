@@ -6,8 +6,7 @@ import {
   Wifi, 
   WifiOff,
   AlertTriangle,
-  RotateCw,
-  Clock
+  RotateCw
 } from 'lucide-react';
 
 export const ConnectionStatus = () => {

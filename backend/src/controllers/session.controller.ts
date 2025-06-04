@@ -29,7 +29,7 @@ export class SessionController {
       res.status(201).json(response);
       
     } catch (error) {
-      this.handleError(error, res, 'Failed to create session');
+      this.handleError(error as Error, res, 'Failed to create session');
     }
   };
 
@@ -61,7 +61,7 @@ export class SessionController {
       res.json(response);
       
     } catch (error) {
-      this.handleError(error, res, 'Failed to retrieve session');
+      this.handleError(error as Error, res, 'Failed to retrieve session');
     }
   };
 
@@ -80,7 +80,7 @@ export class SessionController {
       res.json(response);
       
     } catch (error) {
-      this.handleError(error, res, 'Failed to update session');
+      this.handleError(error as Error, res, 'Failed to update session');
     }
   };
 
@@ -98,7 +98,7 @@ export class SessionController {
       res.json(response);
       
     } catch (error) {
-      this.handleError(error, res, 'Failed to delete session');
+      this.handleError(error as Error, res, 'Failed to delete session');
     }
   };
 
@@ -122,18 +122,18 @@ export class SessionController {
       res.json(response);
       
     } catch (error) {
-      this.handleJoinError(error, res);
+      this.handleJoinError(error as Error, res);
     }
   };
 
-  private handleError(error: any, res: Response, defaultMessage: string): void {
+  private handleError(error: Error, res: Response, defaultMessage: string): void {
     logger.error(defaultMessage, { error: error.message, stack: error.stack });
     
     if (error.name === 'ValidationError') {
       res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.details
+        details: (error as any).details
       });
       return;
     }
@@ -152,7 +152,7 @@ export class SessionController {
     });
   }
 
-  private handleJoinError(error: any, res: Response): void {
+  private handleJoinError(error: Error, res: Response): void {
     logger.error('Failed to join session', { error: error.message });
 
     const errorMessage = error.message;

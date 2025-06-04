@@ -31,7 +31,6 @@ export function ValidatedInput({
   className = '',
   rows = 3
 }: ValidatedInputProps) {
-  const [isFocused, setIsFocused] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
 
   useEffect(() => {
@@ -45,12 +44,11 @@ export function ValidatedInput({
   };
 
   const handleBlur = () => {
-    setIsFocused(false);
     setIsTouched(true);
   };
 
   const handleFocus = () => {
-    setIsFocused(true);
+    // Focus handler for potential future use
   };
 
   const showError = error && isTouched;

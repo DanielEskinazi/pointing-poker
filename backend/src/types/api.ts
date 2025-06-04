@@ -1,9 +1,9 @@
 // API Response Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 // Session API Types

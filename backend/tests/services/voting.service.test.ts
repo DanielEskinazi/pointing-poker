@@ -1,5 +1,6 @@
 import { VotingService, Vote } from '../../src/services/voting.service';
 import { TestDataFactory } from '../utils/test-helpers';
+import { SessionConfig } from '../../src/types/api';
 
 describe('VotingService', () => {
   let votingService: VotingService;
@@ -84,7 +85,7 @@ describe('VotingService', () => {
           autoRevealCards: false,
           timerSeconds: 60,
           cardsRevealed: true
-        } as any
+        } as SessionConfig & { cardsRevealed: boolean }
       });
       const revealedStory = await TestDataFactory.createTestStory(revealedSession.id);
       const revealedPlayer = await TestDataFactory.createTestPlayer(revealedSession.id);

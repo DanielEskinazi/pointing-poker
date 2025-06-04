@@ -16,7 +16,11 @@ export const validateContentType = (req: Request, res: Response, next: NextFunct
   next();
 };
 
-export function validateRequest(schema: z.ZodSchema<any>) {
+export function validateRequest(schema: z.ZodSchema<{
+  body?: unknown;
+  params?: Record<string, string>;
+  query?: Record<string, unknown>;
+}>) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       // Validate the request against the schema

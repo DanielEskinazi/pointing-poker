@@ -211,7 +211,6 @@ describe('PlayerService', () => {
   describe('updateLastSeen', () => {
     it('should update lastSeenAt timestamp', async () => {
       const player = await TestDataFactory.createTestPlayer(sessionId, { name: 'Test Player' });
-      const beforeUpdate = new Date();
       
       await playerService.updateLastSeen(player.id);
 

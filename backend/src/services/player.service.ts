@@ -1,5 +1,6 @@
 import { db } from '../database';
 import { logger } from '../utils/logger';
+import type { Player } from '@prisma/client';
 
 export interface UpdatePlayerDto {
   name?: string;
@@ -201,7 +202,7 @@ export class PlayerService {
     }
   }
 
-  async canPromotePlayer(currentPlayerId: string, _targetPlayerId: string): Promise<boolean> {
+  async canPromotePlayer(currentPlayerId: string): Promise<boolean> {
     try {
       const currentPlayer = await db.getPrisma().player.findUnique({
         where: { id: currentPlayerId },
@@ -215,7 +216,7 @@ export class PlayerService {
     }
   }
 
-  async promoteToHost(playerId: string): Promise<{ newHost: any; previousHost: any }> {
+  async promoteToHost(playerId: string): Promise<{ newHost: Player | null; previousHost: Player | null }> {
     try {
       const player = await db.getPrisma().player.findUnique({
         where: { id: playerId },
@@ -236,29 +237,11 @@ export class PlayerService {
 
       // Get the updated data
       const newHost = await db.getPrisma().player.findUnique({
-        where: { id: playerId },
-        select: {
-          id: true,
-          name: true,
-          avatar: true,
-          isSpectator: true,
-          isActive: true,
-          joinedAt: true,
-          lastSeenAt: true
-        }
+        where: { id: playerId }
       });
 
       const previousHost = previousHostId ? await db.getPrisma().player.findUnique({
-        where: { id: previousHostId },
-        select: {
-          id: true,
-          name: true,
-          avatar: true,
-          isSpectator: true,
-          isActive: true,
-          joinedAt: true,
-          lastSeenAt: true
-        }
+        where: { id: previousHostId }
       }) : null;
 
       logger.info('Player promoted to host successfully', { 

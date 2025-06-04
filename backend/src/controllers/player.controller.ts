@@ -31,7 +31,7 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to get session players');
+      this.handleError(error as Error, res, 'Failed to get session players');
     }
   };
 
@@ -62,7 +62,7 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to update player');
+      this.handleError(error as Error, res, 'Failed to update player');
     }
   };
 
@@ -89,7 +89,7 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to remove player');
+      this.handleError(error as Error, res, 'Failed to remove player');
     }
   };
 
@@ -98,7 +98,7 @@ export class PlayerController {
       const { id } = req.params;
       
       // Check if current user is the session host
-      const canPromote = await this.playerService.canPromotePlayer(req.user?.playerId || '', id);
+      const canPromote = await this.playerService.canPromotePlayer(req.user?.playerId || '');
       if (!canPromote) {
         res.status(403).json({
           success: false,
@@ -116,7 +116,7 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to promote player');
+      this.handleError(error as Error, res, 'Failed to promote player');
     }
   };
 
@@ -142,18 +142,18 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to update player activity');
+      this.handleError(error as Error, res, 'Failed to update player activity');
     }
   };
 
-  private handleError(error: any, res: Response, defaultMessage: string): void {
+  private handleError(error: Error, res: Response, defaultMessage: string): void {
     logger.error(defaultMessage, { error: error.message, stack: error.stack });
     
     if (error.name === 'ValidationError') {
       res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.details
+        details: (error as any).details
       });
       return;
     }
