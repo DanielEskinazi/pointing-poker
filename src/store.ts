@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto } from './types';
+import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote } from './types';
 import type { 
   ConnectionStatus, 
   PlayerJoinedData, 
@@ -12,6 +12,7 @@ import type {
   SessionStateData
 } from './types/websocket';
 import { persist, clearPersistedState } from './store/middleware/persistence';
+import { votingApi } from './services/api/voting';
 
 interface GameStore extends GameState {
   addPlayer: (player: Player) => void;
@@ -35,6 +36,14 @@ interface GameStore extends GameState {
   getCurrentStory: () => Story | null;
   isCreatingStory: boolean;
   setIsCreatingStory: (value: boolean) => void;
+  
+  // Voting management
+  submitVote: (playerId: string, value: CardValue) => Promise<void>;
+  revealVotes: () => Promise<void>;
+  resetVoting: () => Promise<void>;
+  setVotingState: (state: Partial<VotingFlowState>) => void;
+  getVoteProgress: () => { votedCount: number; totalCount: number; hasVoted: boolean };
+  calculateConsensus: (votes: Vote[]) => ConsensusData;
   
   // Connection management
   connectionStatus: ConnectionStatus;
@@ -68,6 +77,14 @@ const initialState: GameState = {
   stories: [],
   cardValues: [1, 2, 3, 5, 8, 13, '?', 'coffee'],
   isConfigured: false,
+  voting: {
+    votes: {},
+    isRevealed: false,
+    hasVoted: false,
+    consensus: null,
+    votingResults: [],
+    currentStoryId: null,
+  },
 };
 
 export const useGameStore = create<GameStore>()(
@@ -232,6 +249,176 @@ export const useGameStore = create<GameStore>()(
 
   setIsCreatingStory: (value) => {
     set({ isCreatingStory: value });
+  },
+
+  // Voting management
+  submitVote: async (playerId, value) => {
+    const { sessionId, getCurrentStory } = get();
+    const currentStory = getCurrentStory();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+    
+    try {
+      // Optimistic update
+      set(state => ({
+        ...state,
+        voting: {
+          ...state.voting,
+          votes: { ...state.voting.votes, [playerId]: value },
+          hasVoted: playerId === state.players.find(p => p.selectedCard)?.id,
+        },
+        players: state.players.map(p =>
+          p.id === playerId ? { ...p, selectedCard: value } : p
+        ),
+        lastSync: new Date()
+      }));
+
+      // API call
+      await votingApi.submitVote(sessionId, {
+        playerId,
+        value,
+        storyId: currentStory?.id,
+      });
+    } catch (error) {
+      // Revert optimistic update on error
+      set(state => ({
+        ...state,
+        voting: {
+          ...state.voting,
+          votes: Object.fromEntries(
+            Object.entries(state.voting.votes).filter(([id]) => id !== playerId)
+          ),
+        },
+        players: state.players.map(p =>
+          p.id === playerId ? { ...p, selectedCard: null } : p
+        ),
+      }));
+      throw error;
+    }
+  },
+
+  revealVotes: async () => {
+    const { sessionId } = get();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+
+    try {
+      const result = await votingApi.revealCards(sessionId);
+      const consensus = get().calculateConsensus(result.data.votes);
+      
+      set(state => ({
+        ...state,
+        isRevealing: true,
+        voting: {
+          ...state.voting,
+          isRevealed: true,
+          votingResults: result.data.votes,
+          consensus,
+        },
+        players: state.players.map(p => ({ ...p, isRevealed: true })),
+        lastSync: new Date()
+      }));
+    } catch (error) {
+      console.error('Error revealing votes:', error);
+      throw error;
+    }
+  },
+
+  resetVoting: async () => {
+    const { sessionId } = get();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+
+    try {
+      await votingApi.resetGame(sessionId);
+      
+      set(state => ({
+        ...state,
+        isRevealing: false,
+        voting: {
+          votes: {},
+          isRevealed: false,
+          hasVoted: false,
+          consensus: null,
+          votingResults: [],
+          currentStoryId: state.voting.currentStoryId,
+        },
+        players: state.players.map(p => ({
+          ...p,
+          selectedCard: null,
+          isRevealed: false,
+        })),
+        lastSync: new Date()
+      }));
+    } catch (error) {
+      console.error('Error resetting voting:', error);
+      throw error;
+    }
+  },
+
+  setVotingState: (votingState) => {
+    set(state => ({
+      ...state,
+      voting: { ...state.voting, ...votingState },
+      lastSync: new Date()
+    }));
+  },
+
+  getVoteProgress: () => {
+    const state = get();
+    const votingPlayers = state.players.filter(p => !p.isSpectator);
+    const votedCount = Object.keys(state.voting.votes).length;
+    const currentPlayer = state.players.find(p => p.selectedCard);
+    
+    return {
+      votedCount,
+      totalCount: votingPlayers.length,
+      hasVoted: !!currentPlayer && !!state.voting.votes[currentPlayer.id],
+    };
+  },
+
+  calculateConsensus: (votes: Vote[]): ConsensusData => {
+    if (votes.length === 0) {
+      return { hasConsensus: false };
+    }
+
+    const numericVotes = votes
+      .map(v => v.value)
+      .filter(v => typeof v === 'number') as number[];
+
+    if (numericVotes.length === 0) {
+      return { hasConsensus: false };
+    }
+
+    // Calculate statistics
+    const average = numericVotes.reduce((sum, val) => sum + val, 0) / numericVotes.length;
+    const sorted = [...numericVotes].sort((a, b) => a - b);
+    const median = sorted.length % 2 === 0
+      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+      : sorted[Math.floor(sorted.length / 2)];
+
+    // Check for consensus (80% agreement within 1 point of median)
+    const tolerance = 1;
+    const consensusVotes = numericVotes.filter(v => Math.abs(v - median) <= tolerance);
+    const consensusPercentage = consensusVotes.length / numericVotes.length;
+    
+    const hasConsensus = consensusPercentage >= 0.8;
+    const deviation = Math.sqrt(
+      numericVotes.reduce((sum, val) => sum + Math.pow(val - average, 2), 0) / numericVotes.length
+    );
+
+    return {
+      hasConsensus,
+      suggestedValue: hasConsensus ? median : undefined,
+      averageValue: average,
+      deviation,
+    };
   },
 
   // Connection management
@@ -427,7 +614,8 @@ export const useGameStore = create<GameStore>()(
       stories: state.stories,
       isRevealing: state.isRevealing,
       timer: state.timer,
-      players: state.players
+      players: state.players,
+      voting: state.voting
     },
     ui: {}
   }),

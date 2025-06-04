@@ -12,6 +12,9 @@ import { ApiError } from './components/ApiError';
 import { CurrentStory } from './components/CurrentStory';
 import { StoryList } from './components/StoryList';
 import { StoryCreatorModal } from './components/StoryCreator';
+import { VotingProgress } from './components/VotingProgress';
+import { VotingResults } from './components/VotingResults';
+import { HostControls } from './components/HostControls';
 import { useGameStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSessionRecovery } from './hooks/useSessionRecovery';
@@ -252,12 +255,24 @@ export default function App() {
 
         {/* Story Management Section */}
         {currentPlayer && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             <div className="lg:col-span-2">
               <CurrentStory />
             </div>
             <div>
               <StoryList />
+            </div>
+          </div>
+        )}
+
+        {/* Voting Section */}
+        {currentPlayer && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div className="lg:col-span-2">
+              {isRevealing ? <VotingResults /> : <VotingProgress />}
+            </div>
+            <div>
+              <HostControls currentPlayerId={playerId} />
             </div>
           </div>
         )}
@@ -289,28 +304,13 @@ export default function App() {
                 value={value}
                 isSelected={selectedCard === value}
                 isRevealed={isRevealing}
-                onClick={() => handleCardSelect(value)}
+                playerId={playerId}
+                onClick={() => setSelectedCard(value)}
               />
             ))}
           </motion.div>
         )}
 
-        <div className="flex justify-center mt-8 gap-4">
-          {!isRevealing && (
-            <button
-              onClick={handleReveal}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-            >
-              Reveal Cards
-            </button>
-          )}
-          <button
-            onClick={handleReset}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-          >
-            New Round
-          </button>
-        </div>
       </div>
       
       {/* Story Creator Modal */}

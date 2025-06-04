@@ -17,6 +17,7 @@ export interface GameState {
   stories: Story[];
   cardValues: CardValue[];
   isConfigured: boolean;
+  voting: VotingFlowState;
 }
 
 export interface Session {
@@ -97,6 +98,28 @@ export interface UpdateStoryDto {
   description?: string;
   isActive?: boolean;
   finalEstimate?: string;
+}
+
+export interface ConsensusData {
+  hasConsensus: boolean;
+  suggestedValue?: CardValue;
+  averageValue?: number;
+  deviation?: number;
+}
+
+export interface VoteProgress {
+  votedPlayers: string[];
+  totalVotingPlayers: number;
+  hasVoted: boolean;
+}
+
+export interface VotingFlowState {
+  votes: Record<string, CardValue>;
+  isRevealed: boolean;
+  hasVoted: boolean;
+  consensus: ConsensusData | null;
+  votingResults: Vote[];
+  currentStoryId: string | null;
 }
 
 export interface CreateSessionDto {
