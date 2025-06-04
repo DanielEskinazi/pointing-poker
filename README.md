@@ -5,7 +5,8 @@ A modern, full-stack Planning Poker application for agile software development t
 ## ✨ Features
 
 ### Core Functionality
-- 🎯 **Session Management** - Create/join sessions with unique IDs and optional passwords
+
+- 🎯 **Session Management** - Create/join sessions with unique IDs and optional password
 - 👥 **Multi-Player Support** - Player avatars, spectator mode, and host controls
 - 📝 **Story Management** - Create, edit, and manage user stories for estimation
 - 🃏 **Voting System** - Card-based estimation with customizable values
@@ -14,6 +15,7 @@ A modern, full-stack Planning Poker application for agile software development t
 - 📊 **Results & Analytics** - Voting statistics and consensus detection
 
 ### Advanced Features
+
 - 🔐 **Encrypted Storage** - Secure state persistence with Web Crypto API
 - 📱 **Multi-tab Support** - Different players from the same browser
 - 🌐 **Offline Resilience** - Graceful network disconnection handling
@@ -24,6 +26,7 @@ A modern, full-stack Planning Poker application for agile software development t
 ## 🏗️ Architecture
 
 ### Hybrid Design
+
 The application supports two deployment modes:
 
 1. **Frontend-Only Mode**: React with Zustand + BroadcastChannel API for cross-tab sync
@@ -32,6 +35,7 @@ The application supports two deployment modes:
 ### Technology Stack
 
 #### Frontend
+
 - **React 18.3** with TypeScript 5.5
 - **Vite 5.4** for fast builds and HMR
 - **Tailwind CSS** for styling
@@ -41,6 +45,7 @@ The application supports two deployment modes:
 - **Socket.io Client** for real-time communication
 
 #### Backend
+
 - **Node.js 20 LTS** with Express.js
 - **TypeScript** for type safety
 - **PostgreSQL 15** with Prisma ORM
@@ -52,10 +57,12 @@ The application supports two deployment modes:
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 20 LTS or higher
 - Docker & Docker Compose (for full-stack mode)
 
 ### Frontend-Only Mode
+
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -71,6 +78,7 @@ npm run dev
 Visit http://localhost:5173 to use the application.
 
 ### Full-Stack Mode with Docker
+
 ```bash
 # Copy environment configuration
 cp .env.example .env
@@ -83,6 +91,7 @@ make up
 ```
 
 **Available Services:**
+
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3001
 - **PostgreSQL**: localhost:5432
@@ -129,14 +138,16 @@ planning-poker/
 ### Available Commands
 
 #### Frontend
+
 ```bash
 npm run dev          # Start development server
-npm run build        # Build for production  
+npm run build        # Build for production
 npm run preview      # Preview production build
 npm run lint         # Run ESLint
 ```
 
 #### Backend
+
 ```bash
 cd backend
 npm run dev          # Start development server
@@ -149,6 +160,7 @@ npm run db:reset     # Reset database
 ```
 
 #### Docker Commands
+
 ```bash
 make up             # Start all services
 make down           # Stop all services
@@ -160,21 +172,25 @@ make prod-up        # Start production services
 ```
 
 ### Debug Tools (Development)
+
 When running `make debug-up`, additional tools are available:
+
 - **pgAdmin**: http://localhost:8080 (PostgreSQL admin)
 - **Redis Commander**: http://localhost:8081 (Redis admin)
 
 ## 🗄️ Database Schema
 
 ### Core Entities
+
 - **Sessions**: Game sessions with configuration and metadata
 - **Players**: Session participants with authentication
 - **Stories**: User stories for estimation
 - **Votes**: Player votes for specific stories
 
 ### Key Relationships
+
 - Sessions → Players (1:many)
-- Sessions → Stories (1:many)  
+- Sessions → Stories (1:many)
 - Players → Votes (1:many)
 - Stories → Votes (1:many)
 
@@ -183,11 +199,12 @@ When running `make debug-up`, additional tools are available:
 ### Environment Variables
 
 #### Backend (.env)
+
 ```bash
 # Database
 DATABASE_URL=postgresql://user:pass@localhost:5432/planning_poker
 
-# Redis  
+# Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
@@ -203,6 +220,7 @@ NODE_ENV=development
 ```
 
 #### Frontend
+
 ```bash
 VITE_API_URL=http://localhost:3001/api
 VITE_WS_URL=ws://localhost:3001
@@ -220,15 +238,17 @@ VITE_WS_URL=ws://localhost:3001
 ## 🏭 Production Deployment
 
 ### Docker Production
+
 ```bash
 # Build production images
 make prod-build
 
-# Deploy production services  
+# Deploy production services
 make prod-up
 ```
 
 ### Production Features
+
 - Multi-stage Docker builds for optimized images
 - Nginx reverse proxy for static assets
 - PostgreSQL with persistent volumes
@@ -239,16 +259,17 @@ make prod-up
 ## 🧪 Testing
 
 - **Frontend**: Jest + React Testing Library
-- **Backend**: Jest + Supertest  
+- **Backend**: Jest + Supertest
 - **Integration**: Docker-based test environments
 - **E2E**: Playwright automation (via MCP tools)
 
 Run tests:
+
 ```bash
 # Frontend tests
 npm test
 
-# Backend tests  
+# Backend tests
 cd backend && npm test
 
 # All tests
@@ -265,8 +286,9 @@ make test
 ## 📊 Current Status
 
 ✅ **Completed Features:**
+
 - Core session and player management
-- Real-time voting and synchronization  
+- Real-time voting and synchronization
 - Story management with CRUD operations
 - State persistence with encryption
 - Multi-tab support
@@ -275,6 +297,7 @@ make test
 - Production deployment configuration
 
 🚧 **In Progress:**
+
 - Advanced timer functionality
 - Data export and statistics
 - Mobile app optimization
@@ -289,6 +312,7 @@ make test
 5. Open a Pull Request
 
 ### Development Guidelines
+
 - Follow TypeScript strict mode
 - Use ESLint configuration
 - Write tests for new features
