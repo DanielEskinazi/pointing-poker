@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Share2 } from "lucide-react";
 import { Card } from "./components/Card";
@@ -48,6 +48,9 @@ export default function App() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [timerKey, setTimerKey] = useState(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
+  
+  // Generate unique tab ID to allow multiple tabs with different players
+  const [tabId] = useState(() => crypto.randomUUID());
 
   // Session recovery
   const { recovering, error } = useSessionRecovery();
@@ -62,7 +65,10 @@ export default function App() {
   // Initialize WebSocket connection with playerId
   const { connected, emit } = useWebSocket(playerId);
 
-  const currentPlayer = players.find((p) => p.id === playerId);
+  // Ensure consistent player identification across tabs and re-renders
+  const currentPlayer = useMemo(() => {
+    return playerId ? players.find((p) => p.id === playerId) || null : null;
+  }, [players, playerId]);
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -162,10 +168,14 @@ export default function App() {
 
   useEffect(() => {
     // Get the current player ID from localStorage if available
-    const storedPlayerId = localStorage.getItem(`player_${sessionId}`);
+    // Use tab-specific key to allow multiple tabs with different players
+    const playerKey = `player_${sessionId}_${tabId}`;
+    const storedPlayerId = localStorage.getItem(playerKey);
     console.log(
       "Checking player ID for session:",
       sessionId,
+      "tab:",
+      tabId,
       "stored:",
       storedPlayerId
     );
@@ -177,7 +187,7 @@ export default function App() {
       // Ensure playerId is null so join form shows
       setPlayerId(null);
     }
-  }, [sessionId]);
+  }, [sessionId, tabId]);
 
   // Show recovery screen while restoring session
   if (recovering || isLoadingSession || isSessionLoading) {
@@ -196,7 +206,7 @@ export default function App() {
 
   // Show config only if we don't have a session or it's not configured
   if (!isConfigured && !sessionId) {
-    return <GameConfig />;
+    return <GameConfig tabId={tabId} />;
   }
 
   return (
@@ -237,16 +247,25 @@ export default function App() {
               )}
             </div>
 
-            {sessionId && !playerId && (
-              <JoinGame sessionId={sessionId} onJoin={setPlayerId} />
+            {/* Show join form when we have a session but no current player */}
+            {sessionId && !currentPlayer && (
+              <JoinGame sessionId={sessionId} tabId={tabId} onJoin={setPlayerId} />
             )}
 
+            {/* Show "Join as Different Player" option when we have an active player */}
             {currentPlayer && sessionId && (
               <div className="text-center mb-4">
                 <button
                   onClick={() => {
+                    // Notify server that this player is leaving the session
+                    if (connected && sessionId) {
+                      emit(ClientEvents.SESSION_LEAVE, { sessionId });
+                    }
+                    
                     // Clear current player to allow joining as different player
-                    localStorage.removeItem(`player_${sessionId}`);
+                    // Use tab-specific key for proper isolation
+                    const playerKey = `player_${sessionId}_${tabId}`;
+                    localStorage.removeItem(playerKey);
                     setPlayerId(null);
                   }}
                   className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
