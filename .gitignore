@@ -27,3 +27,4 @@ dist-ssr
 
 # do not commit mcp configs
 .mcp.json
+
