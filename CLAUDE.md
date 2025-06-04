@@ -51,3 +51,25 @@ Components are functional with TypeScript and follow a presentational pattern:
 ## Workflow Memories
 
 - Whenever we are done implementing any work that we derive from "/specs" folder, lets move it to "/specs/archive"
+
+## MCP Tools
+
+### GitHub Integration
+
+**Repository Information:**
+
+- **Owner**: DanielEskinazi
+- **Repository Name**: pointing-poker
+- **Full Repository**: DanielEskinazi/pointing-poker
+
+When working with GitHub-related tasks, utilize the GitHub MCP server tools (prefixed with `mcp__github__`) when appropriate:
+
+- **Pull Requests**: Use `mcp__github__create_pull_request` for creating PRs instead of gh CLI
+- **Issues**: Use GitHub MCP tools for creating, updating, and searching issues
+- **Code Search**: Use `mcp__github__search_code` for searching across repositories
+- **File Operations**: Use GitHub MCP tools for reading/updating files in remote repositories
+- **Repository Management**: Use GitHub MCP tools for creating branches, forking repos, etc.
+
+### Playwright MCP Tool
+
+You have access to Playwright MCP for browser automation. Can navigate pages, interact with elements, take screenshots, extract content, fill forms, and execute JavaScript. Always navigate first, wait for elements to load, use specific selectors, and close browsers when done.
