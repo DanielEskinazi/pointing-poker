@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { ConnectionManager } from './connection-manager';
 import { RedisStateManager } from './redis-state';
 import { WebSocketRateLimiter } from './rate-limiter';
+import { VotingService } from '../services/voting.service';
 import { 
   ClientEvents, 
   ServerEvents, 
@@ -20,11 +21,13 @@ export class WebSocketServer {
   private connectionManager: ConnectionManager;
   private redisStateManager: RedisStateManager;
   private rateLimiter: WebSocketRateLimiter;
+  private votingService: VotingService;
   private isInitialized = false;
 
   constructor() {
     this.redisStateManager = new RedisStateManager(db.getRedis());
     this.rateLimiter = new WebSocketRateLimiter(db.getRedis());
+    this.votingService = new VotingService();
     this.connectionManager = new ConnectionManager(
       this.redisStateManager, 
       this.rateLimiter
@@ -62,6 +65,9 @@ export class WebSocketServer {
       // Set up cleanup interval
       this.setupCleanupInterval();
 
+      // Set up service event listeners
+      this.setupServiceEventListeners();
+
       this.isInitialized = true;
       logger.info('WebSocket server initialized successfully');
     } catch (error) {
@@ -84,7 +90,7 @@ export class WebSocketServer {
   }
 
   private setupMiddleware(): void {
-    // Authentication middleware
+    // Simplified authentication middleware - no token required
     this.io.use(async (socket, next) => {
       try {
         const { sessionId, playerId, playerName, avatar } = socket.handshake.auth;
@@ -95,8 +101,7 @@ export class WebSocketServer {
 
         // Validate session exists in database
         const session = await db.getPrisma().session.findUnique({
-          where: { id: sessionId, isActive: true },
-          include: { players: true }
+          where: { id: sessionId, isActive: true }
         });
 
         if (!session) {
@@ -108,49 +113,12 @@ export class WebSocketServer {
           return next(new Error('Session has expired'));
         }
 
-        // If playerId is provided, verify player exists with retry logic
-        if (playerId) {
-          let player = null;
-          const maxRetries = 3;
-          const retryDelay = 500; // 500ms between retries
-
-          for (let i = 0; i < maxRetries; i++) {
-            player = await db.getPrisma().player.findUnique({
-              where: { id: playerId }
-            });
-
-            if (player) {
-              // Verify player belongs to this session
-              if (player.sessionId !== sessionId) {
-                return next(new Error('Player does not belong to this session'));
-              }
-              break;
-            }
-
-            // If not the last retry, wait before trying again
-            if (i < maxRetries - 1) {
-              logger.info(`Player not found on attempt ${i + 1}, retrying in ${retryDelay}ms...`, {
-                playerId,
-                sessionId,
-                attempt: i + 1
-              });
-              await new Promise(resolve => setTimeout(resolve, retryDelay));
-            }
-          }
-
-          if (!player) {
-            logger.error('Player not found after retries', { playerId, sessionId });
-            return next(new Error('Player not found in database'));
-          }
-        }
-
-        // Store session info in socket
+        // Store session info in socket - playerId will be set during connection handling
         socket.data = {
           sessionId,
           playerId,
           playerName,
-          avatar,
-          session
+          avatar
         };
 
         logger.debug('Socket authenticated', { 
@@ -247,6 +215,56 @@ export class WebSocketServer {
         socket.disconnect();
       }
     });
+  }
+
+  private setupServiceEventListeners(): void {
+    // Listen to voting service events and broadcast to WebSocket clients
+    this.votingService.on('vote:submitted', (data: { sessionId: string; playerId: string; storyId: string }) => {
+      // Get vote counts and broadcast to session
+      this.getVoteCounts(data.storyId).then(({ voteCount, totalPlayers }) => {
+        this.emitToSession(data.sessionId, ServerEvents.VOTE_SUBMITTED, {
+          playerId: data.playerId,
+          hasVoted: true,
+          voteCount,
+          totalPlayers
+        });
+      }).catch(error => logger.error('Failed to get vote counts:', error));
+    });
+
+    this.votingService.on('cards:revealed', (data: { sessionId: string; votes: any[]; consensus: any; statistics: any }) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      // Map votes to the expected format
+      const voteResults = data.votes.map(vote => ({
+        playerId: vote.playerId,
+        playerName: vote.playerName,
+        value: vote.value,
+        confidence: vote.confidence
+      }));
+
+      // Map consensus to expected format
+      const consensusData = {
+        hasConsensus: data.consensus?.agreement > 0.8,
+        suggestedValue: data.consensus?.value,
+        averageValue: data.consensus?.average,
+        deviation: data.statistics?.standardDeviation
+      };
+
+      this.emitToSession(data.sessionId, ServerEvents.CARDS_REVEALED, {
+        storyId: '', // Will be filled by the current story
+        votes: voteResults,
+        consensus: consensusData
+      });
+    });
+
+    this.votingService.on('game:reset', (data: { sessionId: string }) => {
+      // Get current story and broadcast reset
+      this.getCurrentStory(data.sessionId).then(story => {
+        this.emitToSession(data.sessionId, ServerEvents.GAME_RESET, {
+          storyId: story?.id || ''
+        });
+      }).catch(error => logger.error('Failed to get current story:', error));
+    });
+
+    logger.info('Service event listeners set up successfully');
   }
 
   private setupCleanupInterval(): void {
@@ -351,5 +369,39 @@ export class WebSocketServer {
     data: ServerEventPayloads[T]
   ): void {
     this.io.to(socketId).emit(event, data);
+  }
+
+  // Helper methods for service integration
+  private async getVoteCounts(storyId: string): Promise<{ voteCount: number; totalPlayers: number }> {
+    const [voteCount, story] = await Promise.all([
+      db.getPrisma().vote.count({ where: { storyId } }),
+      db.getPrisma().story.findUnique({
+        where: { id: storyId },
+        include: {
+          session: {
+            include: {
+              players: { where: { isActive: true, isSpectator: false } }
+            }
+          }
+        }
+      })
+    ]);
+
+    return {
+      voteCount,
+      totalPlayers: story?.session.players.length || 0
+    };
+  }
+
+  private async getCurrentStory(sessionId: string) {
+    return db.getPrisma().story.findFirst({
+      where: {
+        sessionId,
+        isActive: true
+      },
+      orderBy: {
+        orderIndex: 'desc'
+      }
+    });
   }
 }

@@ -14,7 +14,7 @@ export class WebSocketClient {
   private eventQueue: QueuedEvent[] = [];
   private isConnected = false;
   
-  connect(sessionId: string, playerId: string, token: string, currentPlayer?: Player) {
+  connect(sessionId: string, playerId: string, playerName?: string, currentPlayer?: Player) {
     if (this.socket) {
       console.log('Socket already exists, disconnecting first');
       this.disconnect();
@@ -30,16 +30,14 @@ export class WebSocketClient {
       wsUrl,
       sessionId,
       playerId,
-      hasToken: !!token,
-      playerName: currentPlayer?.name
+      playerName: playerName || currentPlayer?.name
     });
     
     this.socket = io(wsUrl, {
       auth: { 
         sessionId, 
         playerId, 
-        token,
-        playerName: currentPlayer?.name || 'Anonymous',
+        playerName: playerName || currentPlayer?.name || 'Anonymous',
         avatar: currentPlayer?.avatar || '👤'
       },
       transports: ['websocket', 'polling'],
@@ -95,17 +93,17 @@ export class WebSocketClient {
         data: error.data
       });
       
-      // If it's an authentication error and we haven't tried too many times, retry with delay
-      if ((error.message.includes('Authentication failed') || 
-           error.message.includes('Player not found') ||
-           error.message.includes('not found in database')) && 
+      // If it's a session/player error and we haven't tried too many times, retry with delay
+      if ((error.message.includes('Session not found') || 
+           error.message.includes('Session has expired') ||
+           error.message.includes('Player not found')) && 
           this.reconnectAttempts <= 3) {
-        console.log(`[WebSocket][${timestamp}] Authentication/Player verification failed, likely race condition. Retrying in ${this.reconnectAttempts * 1000}ms...`);
+        console.log(`[WebSocket][${timestamp}] Session/Player verification failed. Retrying in ${this.reconnectAttempts * 1000}ms...`);
         useGameStore.getState().setConnectionStatus('reconnecting');
         
         setTimeout(() => {
           if (this.socket) {
-            console.log(`[WebSocket][${timestamp}] Retrying connection after auth failure...`);
+            console.log(`[WebSocket][${timestamp}] Retrying connection after session error...`);
             this.socket.connect();
           }
         }, this.reconnectAttempts * 1000);

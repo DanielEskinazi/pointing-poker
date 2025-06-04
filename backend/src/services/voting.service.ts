@@ -2,6 +2,14 @@ import { db } from '../database';
 import { logger } from '../utils/logger';
 import { EventEmitter } from 'events';
 
+// WebSocket integration
+let wsServer: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+export const setWebSocketServerForVoting = (server: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  wsServer = server;
+  logger.info('WebSocket server injected into VotingService');
+};
+
 export interface SubmitVoteDto {
   sessionId: string;
   storyId: string;
@@ -94,12 +102,23 @@ export class VotingService {
         }
       });
 
-      // Emit vote event
+      // Emit vote event and broadcast to WebSocket
       this.eventEmitter.emit('vote:submitted', {
         sessionId: data.sessionId,
         playerId: data.playerId,
         storyId: data.storyId
       });
+
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        const { voteCount, totalPlayers } = await this.getVoteCounts(data.storyId);
+        wsServer.emitToSession(data.sessionId, 'vote:submitted', {
+          playerId: data.playerId,
+          hasVoted: true,
+          voteCount,
+          totalPlayers
+        });
+      }
 
       logger.info('Vote submitted successfully', { voteId: vote.id, playerId: data.playerId });
 
@@ -203,6 +222,29 @@ export class VotingService {
         statistics
       });
 
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        const voteResults = votes.map(vote => ({
+          playerId: vote.playerId,
+          playerName: vote.playerName,
+          value: vote.value,
+          confidence: vote.confidence
+        }));
+
+        const consensusData = {
+          hasConsensus: consensus?.agreement ? consensus.agreement > 0.8 : false,
+          suggestedValue: consensus?.value,
+          averageValue: consensus?.average,
+          deviation: statistics?.standardDeviation
+        };
+
+        wsServer.emitToSession(sessionId, 'cards:revealed', {
+          storyId: currentStory.id,
+          votes: voteResults,
+          consensus: consensusData
+        });
+      }
+
       logger.info('Cards revealed successfully', { sessionId, storyId: currentStory.id });
 
       return { votes, consensus, statistics };
@@ -258,6 +300,14 @@ export class VotingService {
 
       // Emit reset event
       this.eventEmitter.emit('game:reset', { sessionId });
+
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        const story = await this.getCurrentStory(sessionId);
+        wsServer.emitToSession(sessionId, 'game:reset', {
+          storyId: story?.id || ''
+        });
+      }
 
       logger.info('Game round reset successfully', { sessionId });
     } catch (error) {
@@ -352,6 +402,28 @@ export class VotingService {
     });
 
     return lastStory ? lastStory.orderIndex + 1 : 1;
+  }
+
+  // Helper method for vote counts
+  private async getVoteCounts(storyId: string): Promise<{ voteCount: number; totalPlayers: number }> {
+    const [voteCount, story] = await Promise.all([
+      db.getPrisma().vote.count({ where: { storyId } }),
+      db.getPrisma().story.findUnique({
+        where: { id: storyId },
+        include: {
+          session: {
+            include: {
+              players: { where: { isActive: true, isSpectator: false } }
+            }
+          }
+        }
+      })
+    ]);
+
+    return {
+      voteCount,
+      totalPlayers: story?.session.players.length || 0
+    };
   }
 
   // Expose event emitter for external listening

@@ -147,8 +147,8 @@ export interface UpdatePlayerDto {
 
 export interface SubmitVoteDto {
   playerId: string;
-  value: CardValue;
-  storyId?: string;
+  value: string; // Backend expects string
+  storyId: string; // Backend requires this
 }
 
 export interface ApiResponse<T> {

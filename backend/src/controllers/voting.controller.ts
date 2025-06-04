@@ -11,8 +11,7 @@ export class VotingController {
   submitVote = async (req: Request, res: Response): Promise<void> => {
     try {
       const { sessionId } = req.params;
-      const { storyId, value, confidence } = req.body;
-      const { playerId } = req.user!;
+      const { storyId, value, confidence, playerId } = req.body;
 
       const result = await this.votingService.submitVote({
         sessionId,

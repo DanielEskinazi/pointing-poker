@@ -9,10 +9,7 @@ export const useWebSocket = (playerId: string | null) => {
   const lastSessionIdRef = useRef<string | null>(null);
   const lastPlayerIdRef = useRef<string | null>(null);
   
-  // Get authentication token from localStorage
-  const getAuthToken = () => {
-    return localStorage.getItem('auth_token');
-  };
+  // No authentication tokens needed for WebSocket connection
   
   useEffect(() => {
     let mounted = true;
@@ -57,11 +54,8 @@ export const useWebSocket = (playerId: string | null) => {
         return;
       }
       
-      const token = getAuthToken();
-      
       console.log(`[WebSocket][${timestamp}] Connection check:`, { 
         playerId, 
-        hasToken: !!token, 
         connectedRef: connectedRef.current,
         connectionStatus 
       });
@@ -107,10 +101,9 @@ export const useWebSocket = (playerId: string | null) => {
           console.log(`[WebSocket][${timestamp}] Connecting to WebSocket...`, {
             sessionId,
             playerId,
-            playerName: currentPlayer?.name,
-            hasToken: !!token
+            playerName: currentPlayer?.name
           });
-          wsClient.connect(sessionId, playerId, token || '', currentPlayer);
+          wsClient.connect(sessionId, playerId, currentPlayer?.name, currentPlayer);
         } else {
           console.log(`[WebSocket][${timestamp}] Skipping connection - component unmounted or missing data`);
         }

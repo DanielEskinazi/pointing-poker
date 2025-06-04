@@ -260,6 +260,8 @@ export const useGameStore = create<GameStore>()(
       throw new Error('No session ID available');
     }
     
+    console.log('Submitting vote:', { playerId, value, currentStory, sessionId });
+    
     try {
       // Optimistic update
       set(state => ({
@@ -275,11 +277,20 @@ export const useGameStore = create<GameStore>()(
         lastSync: new Date()
       }));
 
-      // API call
+      // For now, use sessionId as storyId if no current story is available
+      // This is a temporary workaround until proper story management is implemented
+      const storyId = currentStory?.id || sessionId;
+
+      console.log('API call data:', {
+        playerId,
+        value: value.toString(),
+        storyId
+      });
+
       await votingApi.submitVote(sessionId, {
         playerId,
-        value,
-        storyId: currentStory?.id,
+        value: value.toString(), // Convert to string for backend validation
+        storyId,
       });
     } catch (error) {
       // Revert optimistic update on error
