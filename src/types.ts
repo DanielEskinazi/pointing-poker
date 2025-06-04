@@ -14,6 +14,7 @@ export interface GameState {
   isRevealing: boolean;
   timer: number;
   currentStory: string;
+  stories: Story[];
   cardValues: CardValue[];
   isConfigured: boolean;
 }
@@ -69,10 +70,33 @@ export interface RevealResult {
   };
 }
 
+export interface Story {
+  id: string;
+  title: string;
+  description?: string;
+  finalEstimate?: string;
+  orderIndex: number;
+  isActive: boolean;
+  createdAt: string;
+  completedAt?: string;
+}
+
 export interface StoryData {
   id: string;
   title: string;
   description?: string;
+}
+
+export interface CreateStoryDto {
+  title: string;
+  description?: string;
+}
+
+export interface UpdateStoryDto {
+  title?: string;
+  description?: string;
+  isActive?: boolean;
+  finalEstimate?: string;
 }
 
 export interface CreateSessionDto {

@@ -6,10 +6,12 @@ import { PlayerAvatar } from './components/PlayerAvatar';
 import { Timer } from './components/Timer';
 import { JoinGame } from './components/JoinGame';
 import { GameConfig } from './components/GameConfig';
-import { StoryEditor } from './components/StoryEditor';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { RecoveryScreen, ErrorScreen } from './components/RecoveryScreen';
 import { ApiError } from './components/ApiError';
+import { CurrentStory } from './components/CurrentStory';
+import { StoryList } from './components/StoryList';
+import { StoryCreatorModal } from './components/StoryCreator';
 import { useGameStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSessionRecovery } from './hooks/useSessionRecovery';
@@ -101,7 +103,7 @@ export default function App() {
       // Sync players from session
       if (session.players) {
         syncState({
-          players: session.players.map((p: any) => ({
+          players: session.players.map((p: { id: string; name: string; avatar: string; isSpectator?: boolean }) => ({
             id: p.id,
             name: p.name,
             avatar: p.avatar,
@@ -248,7 +250,17 @@ export default function App() {
           </div>
         )}
 
-        <StoryEditor />
+        {/* Story Management Section */}
+        {currentPlayer && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <div className="lg:col-span-2">
+              <CurrentStory />
+            </div>
+            <div>
+              <StoryList />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
           {players.map((player) => (
@@ -300,6 +312,9 @@ export default function App() {
           </button>
         </div>
       </div>
+      
+      {/* Story Creator Modal */}
+      <StoryCreatorModal />
     </div>
   );
 }

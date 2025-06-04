@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CardValue, GameState, Player } from './types';
+import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto } from './types';
 import type { 
   ConnectionStatus, 
   PlayerJoinedData, 
@@ -25,6 +25,16 @@ interface GameStore extends GameState {
   joinSession: (sessionId: string) => void;
   createSession: () => string;
   sessionId: string | null;
+  
+  // Story management
+  addStory: (story: CreateStoryDto) => void;
+  updateStory: (storyId: string, updates: UpdateStoryDto) => void;
+  deleteStory: (storyId: string) => void;
+  setActiveStory: (storyId: string) => void;
+  setStories: (stories: Story[]) => void;
+  getCurrentStory: () => Story | null;
+  isCreatingStory: boolean;
+  setIsCreatingStory: (value: boolean) => void;
   
   // Connection management
   connectionStatus: ConnectionStatus;
@@ -55,15 +65,17 @@ const initialState: GameState = {
   isRevealing: false,
   timer: 60,
   currentStory: '',
+  stories: [],
   cardValues: [1, 2, 3, 5, 8, 13, '?', 'coffee'],
   isConfigured: false,
 };
 
 export const useGameStore = create<GameStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   ...initialState,
   sessionId: null,
+  isCreatingStory: false,
   
   // Connection state
   connectionStatus: 'disconnected',
@@ -113,7 +125,6 @@ export const useGameStore = create<GameStore>()(
     set(state => ({
       isRevealing: false,
       timer: initialState.timer,
-      currentStory: initialState.currentStory,
       players: state.players.map((p) => ({
         ...p,
         selectedCard: null,
@@ -137,6 +148,90 @@ export const useGameStore = create<GameStore>()(
 
   setIsConfigured: (value) => {
     set({ isConfigured: value, lastSync: new Date() });
+  },
+
+  // Story management
+  addStory: (storyData) => {
+    const newStory: Story = {
+      id: crypto.randomUUID(),
+      title: storyData.title,
+      description: storyData.description,
+      orderIndex: get().stories.length,
+      isActive: get().stories.length === 0, // First story is active by default
+      createdAt: new Date().toISOString(),
+    };
+    
+    set(state => ({
+      stories: [...state.stories, newStory],
+      currentStory: newStory.isActive ? newStory.title : state.currentStory,
+      lastSync: new Date()
+    }));
+  },
+
+  updateStory: (storyId, updates) => {
+    set(state => ({
+      stories: state.stories.map(story =>
+        story.id === storyId ? { ...story, ...updates } : story
+      ),
+      currentStory: updates.isActive && updates.title ? updates.title : state.currentStory,
+      lastSync: new Date()
+    }));
+  },
+
+  deleteStory: (storyId) => {
+    set(state => {
+      const updatedStories = state.stories.filter(story => story.id !== storyId);
+      const deletedStory = state.stories.find(story => story.id === storyId);
+      
+      let newCurrentStory = state.currentStory;
+      if (deletedStory?.isActive && updatedStories.length > 0) {
+        // If we deleted the active story, make the first remaining story active
+        updatedStories[0].isActive = true;
+        newCurrentStory = updatedStories[0].title;
+      } else if (updatedStories.length === 0) {
+        newCurrentStory = '';
+      }
+      
+      return {
+        stories: updatedStories,
+        currentStory: newCurrentStory,
+        lastSync: new Date()
+      };
+    });
+  },
+
+  setActiveStory: (storyId) => {
+    set(state => {
+      const updatedStories = state.stories.map(story => ({
+        ...story,
+        isActive: story.id === storyId
+      }));
+      
+      const activeStory = updatedStories.find(story => story.id === storyId);
+      
+      return {
+        stories: updatedStories,
+        currentStory: activeStory?.title || '',
+        lastSync: new Date()
+      };
+    });
+  },
+
+  setStories: (stories) => {
+    const activeStory = stories.find(story => story.isActive);
+    set({
+      stories,
+      currentStory: activeStory?.title || '',
+      lastSync: new Date()
+    });
+  },
+
+  getCurrentStory: () => {
+    return get().stories.find(story => story.isActive) || null;
+  },
+
+  setIsCreatingStory: (value) => {
+    set({ isCreatingStory: value });
   },
 
   // Connection management
@@ -242,7 +337,7 @@ export const useGameStore = create<GameStore>()(
     });
   },
 
-  handleSessionState: (data: SessionStateData | any) => {
+  handleSessionState: (data: SessionStateData) => {
     const timestamp = new Date().toISOString();
     console.log(`[Store][${timestamp}] handleSessionState called with:`, {
       dataKeys: Object.keys(data),
@@ -257,8 +352,8 @@ export const useGameStore = create<GameStore>()(
       console.log(`[Store][${timestamp}] Processing players:`, data.players.length, data.players);
       console.log(`[Store][${timestamp}] Session config received:`, data.config);
       
-      const updates: any = {
-        players: data.players.map((p: any) => ({
+      const updates: Record<string, unknown> = {
+        players: data.players.map((p: { id: string; name: string; avatar: string; isSpectator?: boolean }) => ({
           id: p.id,
           name: p.name,
           avatar: p.avatar,
@@ -329,6 +424,7 @@ export const useGameStore = create<GameStore>()(
     },
     game: {
       currentStory: state.currentStory,
+      stories: state.stories,
       isRevealing: state.isRevealing,
       timer: state.timer,
       players: state.players
