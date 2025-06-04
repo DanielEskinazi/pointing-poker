@@ -7,6 +7,11 @@ export interface Player {
   selectedCard: CardValue | null;
   isRevealed: boolean;
   isSpectator?: boolean;
+  isHost?: boolean;
+  isOnline?: boolean;
+  joinedAt?: string;
+  lastSeenAt?: string;
+  votedInCurrentRound?: boolean;
 }
 
 export interface GameState {

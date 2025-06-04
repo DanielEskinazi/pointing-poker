@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
+import { LoadingSpinner } from './loading';
+import { useToast } from './toast';
 import type { CardValue } from '../types';
 
 interface CardProps {
@@ -15,9 +17,10 @@ interface CardProps {
 export function Card({ value, isSelected, isRevealed, onClick, playerId, disabled }: CardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitVote, voting, getCurrentStory } = useGameStore();
+  const { showToast } = useToast();
   
   const currentStory = getCurrentStory();
-  const canVote = !disabled && !voting.isRevealed && !isSubmitting && currentStory;
+  const canVote = !disabled && !voting.isRevealed && !isSubmitting;
   const variants = {
     hidden: { 
       scale: 1,
@@ -43,10 +46,21 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
     setIsSubmitting(true);
     try {
       await submitVote(playerId, value);
+      showToast('Vote submitted!', 'success');
       onClick?.();
     } catch (error) {
       console.error('Error submitting vote:', error);
-      // Could add toast notification here
+      showToast(
+        'Failed to submit vote', 
+        'error',
+        {
+          message: 'Please try again',
+          action: {
+            label: 'Retry',
+            onClick: () => handleClick()
+          }
+        }
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -77,7 +91,7 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
     >
       <div className="absolute inset-0 flex items-center justify-center text-3xl font-bold">
         {isSubmitting ? (
-          <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <LoadingSpinner size="sm" color={isSelected ? 'white' : 'primary'} />
         ) : (
           value
         )}

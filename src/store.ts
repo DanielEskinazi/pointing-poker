@@ -8,11 +8,26 @@ import type {
   VoteSubmittedData,
   CardsRevealedData,
   StoryUpdatedData,
+  StoryInfo,
   TimerUpdatedData,
   SessionStateData
 } from './types/websocket';
 import { persist, clearPersistedState } from './store/middleware/persistence';
 import { votingApi } from './services/api/voting';
+import { wsClient } from './services/websocket/client';
+
+interface PlayerWithExtras {
+  id: string;
+  name: string;
+  avatar: string;
+  isSpectator: boolean;
+  isActive: boolean;
+  isHost?: boolean;
+  isOnline?: boolean;
+  joinedAt: Date;
+  lastSeenAt: Date;
+  votedInCurrentRound?: boolean;
+}
 
 interface GameStore extends GameState {
   addPlayer: (player: Player) => void;
@@ -60,9 +75,18 @@ interface GameStore extends GameState {
   handleVoteSubmitted: (data: VoteSubmittedData) => void;
   handleCardsRevealed: (data: CardsRevealedData) => void;
   handleGameReset: (data?: unknown) => void;
+  handleStoryCreated: (data: { story: StoryInfo }) => void;
   handleStoryUpdated: (data: StoryUpdatedData) => void;
+  handleStoryDeleted: (data: { storyId: string }) => void;
   handleTimerUpdated: (data: TimerUpdatedData) => void;
   handleSessionState: (data: SessionStateData) => void;
+  
+  // Player utility methods
+  getCurrentPlayerId: () => string | null;
+  getCurrentPlayer: () => Player | null;
+  isCurrentUserHost: () => boolean;
+  isCurrentUserSpectator: () => boolean;
+  getPlayerById: (playerId: string) => Player | null;
   
   // Persistence methods
   clearSession: () => void;
@@ -169,69 +193,29 @@ export const useGameStore = create<GameStore>()(
 
   // Story management
   addStory: (storyData) => {
-    const newStory: Story = {
-      id: crypto.randomUUID(),
-      title: storyData.title,
-      description: storyData.description,
-      orderIndex: get().stories.length,
-      isActive: get().stories.length === 0, // First story is active by default
-      createdAt: new Date().toISOString(),
-    };
-    
-    set(state => ({
-      stories: [...state.stories, newStory],
-      currentStory: newStory.isActive ? newStory.title : state.currentStory,
-      lastSync: new Date()
-    }));
+    // Use WebSocket to sync story creation across all clients
+    // The WebSocket response will update the state via handleStoryCreated
+    wsClient.createStory(storyData.title, storyData.description, get().stories.length);
   },
 
   updateStory: (storyId, updates) => {
-    set(state => ({
-      stories: state.stories.map(story =>
-        story.id === storyId ? { ...story, ...updates } : story
-      ),
-      currentStory: updates.isActive && updates.title ? updates.title : state.currentStory,
-      lastSync: new Date()
-    }));
+    // Use WebSocket to sync story updates across all clients
+    // The WebSocket response will update the state via handleStoryUpdated
+    wsClient.updateStory(storyId, updates.title, updates.description);
   },
 
   deleteStory: (storyId) => {
-    set(state => {
-      const updatedStories = state.stories.filter(story => story.id !== storyId);
-      const deletedStory = state.stories.find(story => story.id === storyId);
-      
-      let newCurrentStory = state.currentStory;
-      if (deletedStory?.isActive && updatedStories.length > 0) {
-        // If we deleted the active story, make the first remaining story active
-        updatedStories[0].isActive = true;
-        newCurrentStory = updatedStories[0].title;
-      } else if (updatedStories.length === 0) {
-        newCurrentStory = '';
-      }
-      
-      return {
-        stories: updatedStories,
-        currentStory: newCurrentStory,
-        lastSync: new Date()
-      };
-    });
+    // Use WebSocket to sync story deletion across all clients
+    // The WebSocket response will update the state via handleStoryDeleted
+    wsClient.deleteStory(storyId);
   },
 
   setActiveStory: (storyId) => {
-    set(state => {
-      const updatedStories = state.stories.map(story => ({
-        ...story,
-        isActive: story.id === storyId
-      }));
-      
-      const activeStory = updatedStories.find(story => story.id === storyId);
-      
-      return {
-        stories: updatedStories,
-        currentStory: activeStory?.title || '',
-        lastSync: new Date()
-      };
-    });
+    // Use WebSocket to sync active story change across all clients
+    const story = get().stories.find(s => s.id === storyId);
+    if (story) {
+      wsClient.updateStory(storyId, story.title, story.description);
+    }
   },
 
   setStories: (stories) => {
@@ -277,8 +261,7 @@ export const useGameStore = create<GameStore>()(
         lastSync: new Date()
       }));
 
-      // For now, use sessionId as storyId if no current story is available
-      // This is a temporary workaround until proper story management is implemented
+      // Use current story ID if available, otherwise use sessionId as fallback
       const storyId = currentStory?.id || sessionId;
 
       console.log('API call data:', {
@@ -383,14 +366,17 @@ export const useGameStore = create<GameStore>()(
 
   getVoteProgress: () => {
     const state = get();
-    const votingPlayers = state.players.filter(p => !p.isSpectator);
+    const votingPlayers = state.players.filter(p => !p.isSpectator && p.isOnline !== false);
     const votedCount = Object.keys(state.voting.votes).length;
-    const currentPlayer = state.players.find(p => p.selectedCard);
+    const currentPlayerId = state.sessionId ? localStorage.getItem(`player_${state.sessionId}`) : null;
+    const currentPlayer = state.players.find(p => p.id === currentPlayerId);
     
     return {
       votedCount,
       totalCount: votingPlayers.length,
       hasVoted: !!currentPlayer && !!state.voting.votes[currentPlayer.id],
+      canVote: currentPlayer && !currentPlayer.isSpectator,
+      isSpectator: currentPlayer?.isSpectator || false,
     };
   },
 
@@ -474,7 +460,12 @@ export const useGameStore = create<GameStore>()(
           ...p,
           name: data.player.name,
           avatar: data.player.avatar,
-          isSpectator: data.player.isSpectator
+          isSpectator: data.player.isSpectator,
+          isHost: (data.player as PlayerWithExtras).isHost,
+          isOnline: (data.player as PlayerWithExtras).isOnline,
+          lastSeenAt: data.player.lastSeenAt?.toString(),
+          joinedAt: data.player.joinedAt?.toString(),
+          votedInCurrentRound: (data.player as PlayerWithExtras).votedInCurrentRound
         } : p
       ),
       lastSync: new Date()
@@ -521,10 +512,43 @@ export const useGameStore = create<GameStore>()(
     }));
   },
 
-  handleStoryUpdated: (data: StoryUpdatedData) => {
-    set({
-      currentStory: data.story.title,
+  handleStoryCreated: (data: { story: StoryInfo }) => {
+    set(state => ({
+      stories: [...state.stories, data.story],
+      currentStory: data.story.isActive ? data.story.title : state.currentStory,
       lastSync: new Date()
+    }));
+  },
+
+  handleStoryUpdated: (data: StoryUpdatedData) => {
+    set(state => ({
+      stories: state.stories.map(story =>
+        story.id === data.story.id ? data.story : story
+      ),
+      currentStory: data.story.isActive ? data.story.title : state.currentStory,
+      lastSync: new Date()
+    }));
+  },
+
+  handleStoryDeleted: (data: { storyId: string }) => {
+    set(state => {
+      const updatedStories = state.stories.filter(story => story.id !== data.storyId);
+      const deletedStory = state.stories.find(story => story.id === data.storyId);
+      
+      let newCurrentStory = state.currentStory;
+      if (deletedStory?.isActive && updatedStories.length > 0) {
+        // If we deleted the active story, make the first remaining story active
+        updatedStories[0].isActive = true;
+        newCurrentStory = updatedStories[0].title;
+      } else if (updatedStories.length === 0) {
+        newCurrentStory = '';
+      }
+      
+      return {
+        stories: updatedStories,
+        currentStory: newCurrentStory,
+        lastSync: new Date()
+      };
     });
   },
 
@@ -551,13 +575,18 @@ export const useGameStore = create<GameStore>()(
       console.log(`[Store][${timestamp}] Session config received:`, data.config);
       
       const updates: Record<string, unknown> = {
-        players: data.players.map((p: { id: string; name: string; avatar: string; isSpectator?: boolean }) => ({
+        players: data.players.map((p: PlayerWithExtras) => ({
           id: p.id,
           name: p.name,
           avatar: p.avatar,
           selectedCard: null,
           isRevealed: false,
-          isSpectator: p.isSpectator || false
+          isSpectator: p.isSpectator || false,
+          isHost: p.isHost || false,
+          isOnline: p.isOnline ?? true,
+          lastSeenAt: p.lastSeenAt,
+          joinedAt: p.joinedAt,
+          votedInCurrentRound: p.votedInCurrentRound || false
         })),
         currentStory: data.currentStory?.title,
         timer: data.timer?.remainingTime || data.timer?.duration || 60,
@@ -589,6 +618,33 @@ export const useGameStore = create<GameStore>()(
     } else {
       console.log(`[Store][${timestamp}] No players array found in session state data`);
     }
+  },
+
+  // Player utility methods
+  getCurrentPlayerId: () => {
+    const sessionId = get().sessionId;
+    return sessionId ? localStorage.getItem(`player_${sessionId}`) : null;
+  },
+
+  getCurrentPlayer: () => {
+    const state = get();
+    const playerId = state.sessionId ? localStorage.getItem(`player_${state.sessionId}`) : null;
+    return state.players.find(p => p.id === playerId) || null;
+  },
+
+  isCurrentUserHost: () => {
+    const currentPlayer = get().getCurrentPlayer();
+    return currentPlayer?.isHost || false;
+  },
+
+  isCurrentUserSpectator: () => {
+    const currentPlayer = get().getCurrentPlayer();
+    return currentPlayer?.isSpectator || false;
+  },
+
+  getPlayerById: (playerId: string) => {
+    const state = get();
+    return state.players.find(p => p.id === playerId) || null;
   },
 
   // Persistence methods

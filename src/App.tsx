@@ -10,6 +10,8 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { RecoveryScreen, ErrorScreen } from './components/RecoveryScreen';
 import { ApiError } from './components/ApiError';
 import { CurrentStory } from './components/CurrentStory';
+import { ErrorBoundary, SessionErrorBoundary, VotingErrorBoundary } from './components/errors';
+import { ToastProvider } from './components/toast';
 import { StoryList } from './components/StoryList';
 import { StoryCreatorModal } from './components/StoryCreator';
 import { VotingProgress } from './components/VotingProgress';
@@ -38,7 +40,8 @@ export default function App() {
     joinSession,
     setCardValues,
     setIsConfigured,
-    syncState
+    syncState,
+    isCurrentUserHost
   } = useGameStore();
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [timerKey, setTimerKey] = useState(0);
@@ -111,7 +114,8 @@ export default function App() {
             name: p.name,
             avatar: p.avatar,
             selectedCard: null,
-            isSpectator: p.isSpectator
+            isSpectator: p.isSpectator,
+            isHost: session.hostId === p.id
           }))
         });
       }
@@ -121,20 +125,9 @@ export default function App() {
   }, [sessionData, sessionId, setCardValues, setIsConfigured, syncState]);
 
   const handleCardSelect = (value: CardValue) => {
-    if (playerId && !isRevealing && sessionId) {
-      setSelectedCard(value);
-      // Update local state immediately for responsiveness
-      selectCard(playerId, value);
-      
-      // Emit to server if connected
-      if (connected) {
-        emit(ClientEvents.VOTE_SUBMIT, {
-          storyId: sessionId, // Using sessionId as storyId for now
-          value: value?.toString() || '',
-          confidence: 1
-        });
-      }
-    }
+    // Just update selected card state for UI feedback
+    // Actual voting is handled by the Card component's submitVote call
+    setSelectedCard(value);
   };
 
   const handleReveal = () => {
@@ -203,7 +196,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-8">
+    <ErrorBoundary>
+      <ToastProvider>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-8">
       <ConnectionStatus />
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
@@ -267,14 +262,21 @@ export default function App() {
 
         {/* Voting Section */}
         {currentPlayer && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            <div className="lg:col-span-2">
-              {isRevealing ? <VotingResults /> : <VotingProgress />}
+          <SessionErrorBoundary sessionId={sessionId}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+              <div className="lg:col-span-2">
+                <VotingErrorBoundary>
+                  {isRevealing ? <VotingResults /> : <VotingProgress />}
+                </VotingErrorBoundary>
+              </div>
+              <div>
+                <HostControls 
+                  currentPlayerId={playerId} 
+                  isHost={isCurrentUserHost()} 
+                />
+              </div>
             </div>
-            <div>
-              <HostControls currentPlayerId={playerId} />
-            </div>
-          </div>
+          </SessionErrorBoundary>
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
@@ -305,16 +307,18 @@ export default function App() {
                 isSelected={selectedCard === value}
                 isRevealed={isRevealing}
                 playerId={playerId}
-                onClick={() => setSelectedCard(value)}
+                onClick={() => handleCardSelect(value)}
               />
             ))}
           </motion.div>
         )}
 
-      </div>
-      
-      {/* Story Creator Modal */}
-      <StoryCreatorModal />
-    </div>
+        </div>
+        
+        {/* Story Creator Modal */}
+        <StoryCreatorModal />
+        </div>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

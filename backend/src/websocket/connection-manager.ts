@@ -239,6 +239,21 @@ export class ConnectionManager {
       await this.handlePlayerUpdate(socket, io, connection, data);
     });
 
+    // Player removal (host only)
+    socket.on(ClientEvents.PLAYER_REMOVE, async (data: ClientEventPayloads[ClientEvents.PLAYER_REMOVE]) => {
+      await this.handlePlayerRemove(socket, io, connection, data);
+    });
+
+    // Player promotion (host only)
+    socket.on(ClientEvents.PLAYER_PROMOTE, async (data: ClientEventPayloads[ClientEvents.PLAYER_PROMOTE]) => {
+      await this.handlePlayerPromote(socket, io, connection, data);
+    });
+
+    // Player activity heartbeat
+    socket.on(ClientEvents.PLAYER_ACTIVITY, async () => {
+      await this.handlePlayerActivity(socket, io, connection);
+    });
+
     // Timer controls
     socket.on(ClientEvents.TIMER_START, async (data: ClientEventPayloads[ClientEvents.TIMER_START]) => {
       await this.handleTimerStart(socket, io, connection, data);
@@ -581,6 +596,197 @@ export class ConnectionManager {
 
     } catch (error) {
       logger.error('Disconnect handling error:', error);
+    }
+  }
+
+  private async handlePlayerRemove(
+    socket: Socket, 
+    io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.PLAYER_REMOVE]
+  ): Promise<void> {
+    try {
+      const { sessionId, playerId } = connection;
+      const { playerId: targetPlayerId } = data;
+
+      if (!playerId) {
+        socket.emit(ServerEvents.SESSION_ERROR, {
+          error: 'Player ID required for player removal'
+        });
+        return;
+      }
+
+      // Check if current player is host
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: sessionId }
+      });
+
+      if (session?.hostId !== playerId) {
+        socket.emit(ServerEvents.SESSION_ERROR, {
+          error: 'Only session host can remove players'
+        });
+        return;
+      }
+
+      if (targetPlayerId === playerId) {
+        socket.emit(ServerEvents.SESSION_ERROR, {
+          error: 'Cannot remove yourself as host'
+        });
+        return;
+      }
+
+      // Remove the player
+      await db.getPrisma().player.update({
+        where: { id: targetPlayerId },
+        data: { isActive: false }
+      });
+
+      // Remove from online players
+      await this.redisState.setPlayerOffline(targetPlayerId);
+
+      // Get updated player count
+      const playerCount = await this.getActivePlayerCount(sessionId);
+
+      // Notify all players in session
+      io.to(`session:${sessionId}`).emit(ServerEvents.PLAYER_REMOVED, {
+        playerId: targetPlayerId,
+        removedBy: playerId,
+        playerCount
+      });
+
+      // Disconnect the removed player
+      const targetSockets = await this.redisState.getPlayerSockets(targetPlayerId);
+      for (const socketId of targetSockets) {
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (targetSocket) {
+          targetSocket.emit(ServerEvents.SESSION_ERROR, {
+            error: 'You have been removed from the session',
+            code: 'PLAYER_REMOVED'
+          });
+          targetSocket.disconnect();
+        }
+      }
+
+      logger.info('Player removed from session', {
+        sessionId,
+        removedPlayerId: targetPlayerId,
+        removedBy: playerId
+      });
+
+    } catch (error) {
+      logger.error('Player removal failed:', error);
+      socket.emit(ServerEvents.SESSION_ERROR, {
+        error: 'Failed to remove player'
+      });
+    }
+  }
+
+  private async handlePlayerPromote(
+    socket: Socket, 
+    io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.PLAYER_PROMOTE]
+  ): Promise<void> {
+    try {
+      const { sessionId, playerId } = connection;
+      const { playerId: targetPlayerId } = data;
+
+      if (!playerId) {
+        socket.emit(ServerEvents.SESSION_ERROR, {
+          error: 'Player ID required for player promotion'
+        });
+        return;
+      }
+
+      // Check if current player is host
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: sessionId }
+      });
+
+      if (session?.hostId !== playerId) {
+        socket.emit(ServerEvents.SESSION_ERROR, {
+          error: 'Only session host can promote players'
+        });
+        return;
+      }
+
+      // Get players info
+      const [newHost, previousHost] = await Promise.all([
+        db.getPrisma().player.findUnique({
+          where: { id: targetPlayerId }
+        }),
+        db.getPrisma().player.findUnique({
+          where: { id: playerId }
+        })
+      ]);
+
+      if (!newHost || newHost.sessionId !== sessionId) {
+        socket.emit(ServerEvents.SESSION_ERROR, {
+          error: 'Target player not found in session'
+        });
+        return;
+      }
+
+      // Update session host
+      await db.getPrisma().session.update({
+        where: { id: sessionId },
+        data: { hostId: targetPlayerId }
+      });
+
+      // Notify all players in session
+      io.to(`session:${sessionId}`).emit(ServerEvents.PLAYER_PROMOTED, {
+        newHost: this.mapPlayerToInfo(newHost),
+        previousHost: previousHost ? this.mapPlayerToInfo(previousHost) : undefined
+      });
+
+      logger.info('Player promoted to host', {
+        sessionId,
+        newHostId: targetPlayerId,
+        previousHostId: playerId
+      });
+
+    } catch (error) {
+      logger.error('Player promotion failed:', error);
+      socket.emit(ServerEvents.SESSION_ERROR, {
+        error: 'Failed to promote player'
+      });
+    }
+  }
+
+  private async handlePlayerActivity(
+    socket: Socket, 
+    io: Server, 
+    connection: SocketConnection
+  ): Promise<void> {
+    try {
+      const { playerId } = connection;
+
+      if (!playerId) {
+        return;
+      }
+
+      // Update last seen timestamp
+      const updatedPlayer = await db.getPrisma().player.update({
+        where: { id: playerId },
+        data: { lastSeenAt: new Date() }
+      });
+
+      // Update connection activity
+      await this.redisState.updateConnectionActivity(socket.id);
+
+      // Check if player status changed (online/offline)
+      const isOnline = new Date().getTime() - updatedPlayer.lastSeenAt.getTime() < 5 * 60 * 1000;
+
+      // Broadcast status change to session
+      io.to(`session:${connection.sessionId}`).emit(ServerEvents.PLAYER_STATUS_CHANGED, {
+        playerId,
+        isOnline,
+        lastSeenAt: updatedPlayer.lastSeenAt
+      });
+
+    } catch (error) {
+      logger.error('Player activity update failed:', error);
+      // Don't emit error for activity updates as they're not critical
     }
   }
 

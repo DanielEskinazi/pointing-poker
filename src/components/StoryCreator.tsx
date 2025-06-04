@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store';
+import { ValidatedInput } from './forms';
+import { LoadingButton } from './loading';
+import { useToast } from './toast';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { storyValidationSchema } from '../validation/schemas';
 
 interface StoryCreatorProps {
   onClose?: () => void;
@@ -9,30 +14,62 @@ interface StoryCreatorProps {
 export const StoryCreator = ({ onClose }: StoryCreatorProps) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { addStory, setIsCreatingStory } = useGameStore();
+  const { showToast } = useToast();
+  const validation = useFormValidation(storyValidationSchema);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title.trim()) return;
+    // Validate form
+    const isValid = validation.validateForm({ title, description });
+    if (!isValid) {
+      showToast('Please fix the errors below', 'error');
+      return;
+    }
 
-    addStory({
-      title: title.trim(),
-      description: description.trim() || undefined,
-    });
+    setIsSubmitting(true);
+    try {
+      addStory({
+        title: title.trim(),
+        description: description.trim() || undefined,
+      });
 
-    // Reset form
-    setTitle('');
-    setDescription('');
-    setIsCreatingStory(false);
-    onClose?.();
+      showToast('Story created successfully!', 'success');
+
+      // Reset form
+      setTitle('');
+      setDescription('');
+      validation.clearAllErrors();
+      setIsCreatingStory(false);
+      onClose?.();
+    } catch (error) {
+      console.error('Error creating story:', error);
+      showToast('Failed to create story', 'error', {
+        message: 'Please try again'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
     setTitle('');
     setDescription('');
+    validation.clearAllErrors();
     setIsCreatingStory(false);
     onClose?.();
+  };
+
+  const handleTitleChange = (value: string) => {
+    setTitle(value);
+    validation.validateField('title', value);
+  };
+
+  const handleDescriptionChange = (value: string) => {
+    setDescription(value);
+    validation.validateField('description', value);
   };
 
   return (
@@ -55,51 +92,47 @@ export const StoryCreator = ({ onClose }: StoryCreatorProps) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="story-title" className="block text-sm font-medium text-gray-700 mb-1">
-            Title *
-          </label>
-          <input
-            id="story-title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., US-123: User Login"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
-            autoFocus
-          />
-        </div>
+        <ValidatedInput
+          label="Title"
+          name="title"
+          value={title}
+          onChange={handleTitleChange}
+          error={validation.getFieldError('title')}
+          placeholder="e.g., US-123: User Login"
+          required
+        />
 
-        <div>
-          <label htmlFor="story-description" className="block text-sm font-medium text-gray-700 mb-1">
-            Description (optional)
-          </label>
-          <textarea
-            id="story-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="As a user, I want to..."
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
-        </div>
+        <ValidatedInput
+          label="Description"
+          name="description"
+          type="textarea"
+          value={description}
+          onChange={handleDescriptionChange}
+          error={validation.getFieldError('description')}
+          placeholder="As a user, I want to..."
+          rows={3}
+        />
 
         <div className="flex gap-3 pt-4">
-          <button
+          <LoadingButton
             type="button"
             onClick={handleCancel}
-            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+            variant="secondary"
+            className="flex-1"
+            disabled={isSubmitting}
           >
             Cancel
-          </button>
-          <button
+          </LoadingButton>
+          <LoadingButton
             type="submit"
-            disabled={!title.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={!validation.isValid || !title.trim()}
+            isLoading={isSubmitting}
+            loadingText="Creating..."
+            variant="primary"
+            className="flex-1"
           >
             Add Story
-          </button>
+          </LoadingButton>
         </div>
       </form>
     </motion.div>

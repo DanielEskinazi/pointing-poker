@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PlayerController } from '../controllers/player.controller';
-import { authenticate, authorizePlayer, authorizeHost } from '../middleware/auth';
+import { authenticate, authorizePlayer } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
 import { 
   GetSessionPlayersSchema,
@@ -28,9 +28,20 @@ router.put('/players/:id',
 // Remove player (host only)
 router.delete('/players/:id',
   authenticate,
-  authorizeHost,
   validateRequest(RemovePlayerSchema),
   controller.remove
+);
+
+// Promote player to host (host only)
+router.post('/players/:id/promote',
+  authenticate,
+  controller.promote
+);
+
+// Update player activity heartbeat
+router.put('/players/:id/activity',
+  authenticate,
+  controller.updateActivity
 );
 
 export default router;

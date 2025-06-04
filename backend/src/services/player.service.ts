@@ -13,14 +13,23 @@ export interface PlayerWithVote {
   avatar: string;
   isSpectator: boolean;
   isActive: boolean;
+  isHost: boolean;
+  isOnline: boolean;
+  joinedAt: Date;
   lastSeenAt: Date;
   currentVote: string | null;
+  votedInCurrentRound: boolean;
 }
 
 export class PlayerService {
 
   async getSessionPlayers(sessionId: string): Promise<PlayerWithVote[]> {
     try {
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: sessionId },
+        select: { hostId: true }
+      });
+
       const players = await db.getPrisma().player.findMany({
         where: {
           sessionId,
@@ -47,14 +56,21 @@ export class PlayerService {
         }
       });
 
+      const now = new Date();
+      const ONLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
       return players.map(player => ({
         id: player.id,
         name: player.name,
         avatar: player.avatar,
         isSpectator: player.isSpectator,
         isActive: player.isActive,
+        isHost: session?.hostId === player.id,
+        isOnline: now.getTime() - player.lastSeenAt.getTime() < ONLINE_THRESHOLD,
+        joinedAt: player.joinedAt,
         lastSeenAt: player.lastSeenAt,
-        currentVote: player.votes.length > 0 ? player.votes[0].value : null
+        currentVote: player.votes.length > 0 ? player.votes[0].value : null,
+        votedInCurrentRound: player.votes.length > 0
       }));
     } catch (error) {
       logger.error('Failed to get session players:', error);
@@ -167,6 +183,127 @@ export class PlayerService {
     } catch (error) {
       logger.error('Failed to update player last seen:', error);
       // Don't throw here as this is not critical
+    }
+  }
+
+  async canRemovePlayer(currentPlayerId: string, targetPlayerId: string): Promise<boolean> {
+    try {
+      const currentPlayer = await db.getPrisma().player.findUnique({
+        where: { id: currentPlayerId },
+        include: { session: true }
+      });
+
+      return currentPlayer?.session.hostId === currentPlayerId && 
+             currentPlayerId !== targetPlayerId;
+    } catch (error) {
+      logger.error('Failed to check if player can be removed:', error);
+      return false;
+    }
+  }
+
+  async canPromotePlayer(currentPlayerId: string, _targetPlayerId: string): Promise<boolean> {
+    try {
+      const currentPlayer = await db.getPrisma().player.findUnique({
+        where: { id: currentPlayerId },
+        include: { session: true }
+      });
+
+      return currentPlayer?.session.hostId === currentPlayerId;
+    } catch (error) {
+      logger.error('Failed to check if player can be promoted:', error);
+      return false;
+    }
+  }
+
+  async promoteToHost(playerId: string): Promise<{ newHost: any; previousHost: any }> {
+    try {
+      const player = await db.getPrisma().player.findUnique({
+        where: { id: playerId },
+        include: { session: true }
+      });
+
+      if (!player) {
+        throw new Error('Player not found');
+      }
+
+      const previousHostId = player.session.hostId;
+
+      // Update session to set new host
+      await db.getPrisma().session.update({
+        where: { id: player.sessionId },
+        data: { hostId: playerId }
+      });
+
+      // Get the updated data
+      const newHost = await db.getPrisma().player.findUnique({
+        where: { id: playerId },
+        select: {
+          id: true,
+          name: true,
+          avatar: true,
+          isSpectator: true,
+          isActive: true,
+          joinedAt: true,
+          lastSeenAt: true
+        }
+      });
+
+      const previousHost = previousHostId ? await db.getPrisma().player.findUnique({
+        where: { id: previousHostId },
+        select: {
+          id: true,
+          name: true,
+          avatar: true,
+          isSpectator: true,
+          isActive: true,
+          joinedAt: true,
+          lastSeenAt: true
+        }
+      }) : null;
+
+      logger.info('Player promoted to host successfully', { 
+        playerId, 
+        sessionId: player.sessionId,
+        previousHostId 
+      });
+
+      return { newHost, previousHost };
+    } catch (error) {
+      logger.error('Failed to promote player to host:', error);
+      throw error;
+    }
+  }
+
+  async autoPromoteHost(sessionId: string): Promise<string | null> {
+    try {
+      const oldestPlayer = await db.getPrisma().player.findFirst({
+        where: {
+          sessionId,
+          isActive: true
+        },
+        orderBy: {
+          joinedAt: 'asc'
+        }
+      });
+
+      if (!oldestPlayer) {
+        return null;
+      }
+
+      await db.getPrisma().session.update({
+        where: { id: sessionId },
+        data: { hostId: oldestPlayer.id }
+      });
+
+      logger.info('Auto-promoted player to host', { 
+        playerId: oldestPlayer.id, 
+        sessionId 
+      });
+
+      return oldestPlayer.id;
+    } catch (error) {
+      logger.error('Failed to auto-promote host:', error);
+      return null;
     }
   }
 }

@@ -1,24 +1,40 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
+import { LoadingButton } from './loading';
+import { useToast } from './toast';
+import type { Player } from '../types';
 
 interface HostControlsProps {
   currentPlayerId?: string;
   isHost?: boolean;
+  players?: Player[];
+  onRemovePlayer?: (playerId: string) => void;
+  onPromotePlayer?: (playerId: string) => void;
+  onToggleSpectator?: (playerId: string) => void;
 }
 
-export const HostControls = ({ currentPlayerId, isHost = true }: HostControlsProps) => {
+export const HostControls = ({ 
+  currentPlayerId, 
+  isHost = false, 
+  players = [],
+  onRemovePlayer,
+  onPromotePlayer,
+  onToggleSpectator
+}: HostControlsProps) => {
   const [isRevealing, setIsRevealing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   
   const { 
-    voting, 
     isRevealing: cardsRevealed,
     revealVotes, 
     resetVoting, 
     getVoteProgress,
     setIsCreatingStory
   } = useGameStore();
+  
+  const { showToast } = useToast();
 
   const { votedCount, totalCount } = getVoteProgress();
   const canReveal = votedCount > 0 && !cardsRevealed;
@@ -35,9 +51,16 @@ export const HostControls = ({ currentPlayerId, isHost = true }: HostControlsPro
     setIsRevealing(true);
     try {
       await revealVotes();
+      showToast('Cards revealed!', 'info');
     } catch (error) {
       console.error('Error revealing votes:', error);
-      // Could add toast notification here
+      showToast('Failed to reveal cards', 'error', {
+        message: 'Please try again',
+        action: {
+          label: 'Retry',
+          onClick: handleReveal
+        }
+      });
     } finally {
       setIsRevealing(false);
     }
@@ -49,9 +72,16 @@ export const HostControls = ({ currentPlayerId, isHost = true }: HostControlsPro
     setIsResetting(true);
     try {
       await resetVoting();
+      showToast('Voting reset', 'info');
     } catch (error) {
       console.error('Error resetting voting:', error);
-      // Could add toast notification here
+      showToast('Failed to reset voting', 'error', {
+        message: 'Please try again',
+        action: {
+          label: 'Retry',
+          onClick: handleReset
+        }
+      });
     } finally {
       setIsResetting(false);
     }
@@ -60,6 +90,23 @@ export const HostControls = ({ currentPlayerId, isHost = true }: HostControlsPro
   const handleNewStory = () => {
     setIsCreatingStory(true);
   };
+
+  const handlePlayerAction = (action: string, playerId: string) => {
+    switch (action) {
+      case 'remove':
+        onRemovePlayer?.(playerId);
+        break;
+      case 'promote':
+        onPromotePlayer?.(playerId);
+        break;
+      case 'spectator':
+        onToggleSpectator?.(playerId);
+        break;
+    }
+    setSelectedPlayer(null);
+  };
+
+  const otherPlayers = players.filter(p => p.id !== currentPlayerId);
 
   return (
     <motion.div
@@ -106,60 +153,36 @@ export const HostControls = ({ currentPlayerId, isHost = true }: HostControlsPro
       {/* Action Buttons */}
       <div className="space-y-3">
         {/* Reveal Cards Button */}
-        <motion.button
-          whileHover={canReveal ? { scale: 1.02 } : {}}
-          whileTap={canReveal ? { scale: 0.98 } : {}}
+        <LoadingButton
           onClick={handleReveal}
-          disabled={!canReveal || isRevealing}
-          className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-semibold transition-colors ${
-            canReveal
-              ? 'bg-blue-600 hover:bg-blue-700 text-white'
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-          }`}
+          disabled={!canReveal}
+          isLoading={isRevealing}
+          loadingText="Revealing..."
+          className="w-full"
+          variant={canReveal ? "primary" : "secondary"}
         >
-          {isRevealing ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Revealing...
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              Reveal Cards
-              {votedCount < totalCount && ` (${votedCount}/${totalCount})`}
-            </>
-          )}
-        </motion.button>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          Reveal Cards
+          {votedCount < totalCount && ` (${votedCount}/${totalCount})`}
+        </LoadingButton>
 
         {/* Reset Voting Button */}
-        <motion.button
-          whileHover={canReset ? { scale: 1.02 } : {}}
-          whileTap={canReset ? { scale: 0.98 } : {}}
+        <LoadingButton
           onClick={handleReset}
-          disabled={!canReset || isResetting}
-          className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-semibold transition-colors ${
-            canReset
-              ? 'bg-gray-600 hover:bg-gray-700 text-white'
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-          }`}
+          disabled={!canReset}
+          isLoading={isResetting}
+          loadingText="Resetting..."
+          className="w-full"
+          variant="secondary"
         >
-          {isResetting ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Resetting...
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Reset Voting
-            </>
-          )}
-        </motion.button>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Reset Voting
+        </LoadingButton>
 
         {/* New Story Button */}
         <motion.button
@@ -174,6 +197,104 @@ export const HostControls = ({ currentPlayerId, isHost = true }: HostControlsPro
           Add New Story
         </motion.button>
       </div>
+
+      {/* Player Management */}
+      {isHost && otherPlayers.length > 0 && (
+        <div className="border-t pt-4 mt-6">
+          <h4 className="text-md font-semibold text-gray-900 mb-3">Player Management</h4>
+          
+          {!selectedPlayer ? (
+            <div className="space-y-2">
+              <div className="text-sm text-gray-600 mb-2">Select a player to manage:</div>
+              {otherPlayers.map((player) => (
+                <button
+                  key={player.id}
+                  onClick={() => setSelectedPlayer(player)}
+                  className="w-full p-3 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">{player.avatar}</span>
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">{player.name}</span>
+                          {player.isHost && <span className="text-xs">👑</span>}
+                          {player.isSpectator && <span className="text-xs">👁️</span>}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {player.votedInCurrentRound ? 'Has voted ✅' : 'Not voted ⏳'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        player.isOnline ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      <span className="text-xs text-gray-500">
+                        {player.isOnline ? 'Online' : 'Offline'}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-lg">{selectedPlayer.avatar}</span>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">{selectedPlayer.name}</span>
+                      {selectedPlayer.isHost && <span className="text-xs">👑</span>}
+                      {selectedPlayer.isSpectator && <span className="text-xs">👁️</span>}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {selectedPlayer.isOnline ? 'Online' : 'Offline'} • 
+                      {selectedPlayer.isSpectator ? ' Spectator' : ' Voter'} • 
+                      {selectedPlayer.votedInCurrentRound ? ' Has voted' : ' Not voted'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                {!selectedPlayer.isHost && (
+                  <button
+                    onClick={() => handlePlayerAction('promote', selectedPlayer.id)}
+                    className="py-2 px-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                  >
+                    👑 Make Host
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => handlePlayerAction('spectator', selectedPlayer.id)}
+                  className="py-2 px-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
+                >
+                  {selectedPlayer.isSpectator ? '🗳️ Make Voter' : '👁️ Make Spectator'}
+                </button>
+                
+                {!selectedPlayer.isHost && (
+                  <button
+                    onClick={() => handlePlayerAction('remove', selectedPlayer.id)}
+                    className="py-2 px-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
+                  >
+                    ❌ Remove
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setSelectedPlayer(null)}
+                  className="py-2 px-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors text-sm font-medium"
+                >
+                  ← Back
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Help Text */}
       <div className="mt-4 p-3 bg-blue-50 rounded-lg">
