@@ -13,7 +13,11 @@ const PRESET_CONFIGS = {
   special: ['1', '2', '3', '5', '8', '?', '☕'], // Using valid special characters
 } as const;
 
-export function GameConfig() {
+interface GameConfigProps {
+  tabId: string;
+}
+
+export function GameConfig({ tabId }: GameConfigProps) {
   const [customValues, setCustomValues] = useState<string>('');
   const [hostName, setHostName] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
@@ -48,13 +52,18 @@ export function GameConfig() {
       setIsConfigured(true);
       joinSession(result.data.session.id);
       
-      // Store host player ID
-      localStorage.setItem(`player_${result.data.session.id}`, result.data.session.players[0].id);
+      // Store host player ID with tab-specific key
+      const playerKey = `player_${result.data.session.id}_${tabId}`;
+      localStorage.setItem(playerKey, result.data.session.players[0].id);
       
       // Update URL
       const url = new URL(window.location.href);
       url.searchParams.set('session', result.data.session.id);
       window.history.pushState({}, '', url.toString());
+      
+      // Clear form state after successful creation
+      setHostName('');
+      setCustomValues('');
     } catch (error) {
       console.error('Failed to create session:', error);
       alert('Failed to create session. Please try again.');

@@ -5,6 +5,9 @@ export enum ClientEvents {
   
   // Player actions
   PLAYER_UPDATE = 'player:update',
+  PLAYER_REMOVE = 'player:remove',
+  PLAYER_PROMOTE = 'player:promote',
+  PLAYER_ACTIVITY = 'player:activity',
   VOTE_SUBMIT = 'vote:submit',
   VOTE_CHANGE = 'vote:change',
   
@@ -31,6 +34,9 @@ export enum ServerEvents {
   PLAYER_JOINED = 'player:joined',
   PLAYER_LEFT = 'player:left',
   PLAYER_UPDATED = 'player:updated',
+  PLAYER_REMOVED = 'player:removed',
+  PLAYER_PROMOTED = 'player:promoted',
+  PLAYER_STATUS_CHANGED = 'player:status_changed',
   
   // Game state
   VOTE_SUBMITTED = 'vote:submitted',
@@ -112,6 +118,16 @@ export interface ClientEventPayloads {
     avatar?: string;
     isSpectator?: boolean;
   };
+  
+  [ClientEvents.PLAYER_REMOVE]: {
+    playerId: string;
+  };
+  
+  [ClientEvents.PLAYER_PROMOTE]: {
+    playerId: string;
+  };
+  
+  [ClientEvents.PLAYER_ACTIVITY]: Record<string, never>;
   
   [ClientEvents.VOTE_SUBMIT]: {
     storyId: string;
@@ -198,6 +214,23 @@ export interface ServerEventPayloads {
   
   [ServerEvents.PLAYER_UPDATED]: {
     player: PlayerInfo;
+  };
+  
+  [ServerEvents.PLAYER_REMOVED]: {
+    playerId: string;
+    removedBy: string;
+    playerCount: number;
+  };
+  
+  [ServerEvents.PLAYER_PROMOTED]: {
+    newHost: PlayerInfo;
+    previousHost?: PlayerInfo;
+  };
+  
+  [ServerEvents.PLAYER_STATUS_CHANGED]: {
+    playerId: string;
+    isOnline: boolean;
+    lastSeenAt: Date;
   };
   
   [ServerEvents.VOTE_SUBMITTED]: {

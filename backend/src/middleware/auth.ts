@@ -13,6 +13,7 @@ declare global {
   }
 }
 
+
 export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const token = extractTokenFromHeader(req.headers.authorization);

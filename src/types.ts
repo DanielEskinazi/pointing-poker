@@ -7,6 +7,11 @@ export interface Player {
   selectedCard: CardValue | null;
   isRevealed: boolean;
   isSpectator?: boolean;
+  isHost?: boolean;
+  isOnline?: boolean;
+  joinedAt?: string;
+  lastSeenAt?: string;
+  votedInCurrentRound?: boolean;
 }
 
 export interface GameState {
@@ -14,8 +19,10 @@ export interface GameState {
   isRevealing: boolean;
   timer: number;
   currentStory: string;
+  stories: Story[];
   cardValues: CardValue[];
   isConfigured: boolean;
+  voting: VotingFlowState;
 }
 
 export interface Session {
@@ -69,10 +76,55 @@ export interface RevealResult {
   };
 }
 
+export interface Story {
+  id: string;
+  title: string;
+  description?: string;
+  finalEstimate?: string;
+  orderIndex: number;
+  isActive: boolean;
+  createdAt: string;
+  completedAt?: string;
+}
+
 export interface StoryData {
   id: string;
   title: string;
   description?: string;
+}
+
+export interface CreateStoryDto {
+  title: string;
+  description?: string;
+}
+
+export interface UpdateStoryDto {
+  title?: string;
+  description?: string;
+  isActive?: boolean;
+  finalEstimate?: string;
+}
+
+export interface ConsensusData {
+  hasConsensus: boolean;
+  suggestedValue?: CardValue;
+  averageValue?: number;
+  deviation?: number;
+}
+
+export interface VoteProgress {
+  votedPlayers: string[];
+  totalVotingPlayers: number;
+  hasVoted: boolean;
+}
+
+export interface VotingFlowState {
+  votes: Record<string, CardValue>;
+  isRevealed: boolean;
+  hasVoted: boolean;
+  consensus: ConsensusData | null;
+  votingResults: Vote[];
+  currentStoryId: string | null;
 }
 
 export interface CreateSessionDto {
@@ -100,8 +152,8 @@ export interface UpdatePlayerDto {
 
 export interface SubmitVoteDto {
   playerId: string;
-  value: CardValue;
-  storyId?: string;
+  value: string; // Backend expects string
+  storyId: string; // Backend requires this
 }
 
 export interface ApiResponse<T> {

@@ -1,6 +1,24 @@
 import { db } from '../database';
 import { logger } from '../utils/logger';
 import { EventEmitter } from 'events';
+import { Prisma } from '@prisma/client';
+import type { WebSocketServer } from '../websocket/server';
+import { ServerEvents } from '../websocket/events';
+
+// Event payload types for the voting service
+interface VotingServiceEvents {
+  'vote:submitted': { sessionId: string; playerId: string; storyId: string };
+  'cards:revealed': { sessionId: string; votes: Vote[]; consensus: ConsensusResult | null; statistics: StatisticsResult | null };
+  'game:reset': { sessionId: string };
+}
+
+// WebSocket integration
+let wsServer: WebSocketServer | null = null;
+
+export const setWebSocketServerForVoting = (server: WebSocketServer) => {
+  wsServer = server;
+  logger.info('WebSocket server injected into VotingService');
+};
 
 export interface SubmitVoteDto {
   sessionId: string;
@@ -66,7 +84,9 @@ export class VotingService {
       }
 
       // Check if cards already revealed
-      if (story.session.config && (story.session.config as any).cardsRevealed) {
+      const sessionConfig = story.session.config as Prisma.JsonValue;
+      if (sessionConfig && typeof sessionConfig === 'object' && sessionConfig !== null && 
+          'cardsRevealed' in sessionConfig && (sessionConfig as { cardsRevealed?: boolean }).cardsRevealed) {
         return {
           success: false,
           error: 'Voting closed - cards already revealed'
@@ -94,12 +114,23 @@ export class VotingService {
         }
       });
 
-      // Emit vote event
+      // Emit vote event and broadcast to WebSocket
       this.eventEmitter.emit('vote:submitted', {
         sessionId: data.sessionId,
         playerId: data.playerId,
         storyId: data.storyId
       });
+
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        const { voteCount, totalPlayers } = await this.getVoteCounts(data.storyId);
+        wsServer.emitToSession(data.sessionId, ServerEvents.VOTE_SUBMITTED, {
+          playerId: data.playerId,
+          hasVoted: true,
+          voteCount,
+          totalPlayers
+        });
+      }
 
       logger.info('Vote submitted successfully', { voteId: vote.id, playerId: data.playerId });
 
@@ -173,8 +204,9 @@ export class VotingService {
         throw new Error('Session not found');
       }
 
+      const currentConfig = session.config as Prisma.JsonValue;
       const updatedConfig = {
-        ...session.config as any,
+        ...(typeof currentConfig === 'object' && currentConfig !== null ? currentConfig : {}),
         cardsRevealed: true
       };
 
@@ -202,6 +234,29 @@ export class VotingService {
         consensus,
         statistics
       });
+
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        const voteResults = votes.map(vote => ({
+          playerId: vote.playerId,
+          playerName: vote.playerName,
+          value: vote.value,
+          confidence: vote.confidence
+        }));
+
+        const consensusData = {
+          hasConsensus: consensus?.agreement ? consensus.agreement > 0.8 : false,
+          suggestedValue: consensus?.value,
+          averageValue: consensus?.average || undefined,
+          deviation: statistics?.standardDeviation
+        };
+
+        wsServer.emitToSession(sessionId, ServerEvents.CARDS_REVEALED, {
+          storyId: currentStory.id,
+          votes: voteResults,
+          consensus: consensusData
+        });
+      }
 
       logger.info('Cards revealed successfully', { sessionId, storyId: currentStory.id });
 
@@ -245,8 +300,9 @@ export class VotingService {
       });
 
       if (session) {
+        const currentConfig = session.config as Prisma.JsonValue;
         const updatedConfig = {
-          ...session.config as any,
+          ...(typeof currentConfig === 'object' && currentConfig !== null ? currentConfig : {}),
           cardsRevealed: false
         };
 
@@ -258,6 +314,14 @@ export class VotingService {
 
       // Emit reset event
       this.eventEmitter.emit('game:reset', { sessionId });
+
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        const story = await this.getCurrentStory(sessionId);
+        wsServer.emitToSession(sessionId, ServerEvents.GAME_RESET, {
+          storyId: story?.id || ''
+        });
+      }
 
       logger.info('Game round reset successfully', { sessionId });
     } catch (error) {
@@ -354,12 +418,38 @@ export class VotingService {
     return lastStory ? lastStory.orderIndex + 1 : 1;
   }
 
+  // Helper method for vote counts
+  private async getVoteCounts(storyId: string): Promise<{ voteCount: number; totalPlayers: number }> {
+    const [voteCount, story] = await Promise.all([
+      db.getPrisma().vote.count({ where: { storyId } }),
+      db.getPrisma().story.findUnique({
+        where: { id: storyId },
+        include: {
+          session: {
+            include: {
+              players: { where: { isActive: true, isSpectator: false } }
+            }
+          }
+        }
+      })
+    ]);
+
+    return {
+      voteCount,
+      totalPlayers: story?.session.players.length || 0
+    };
+  }
+
   // Expose event emitter for external listening
-  on(event: string, listener: (...args: any[]) => void) {
+  on<K extends keyof VotingServiceEvents>(event: K, listener: (data: VotingServiceEvents[K]) => void): void;
+  on(event: string, listener: (...args: unknown[]) => void): void;
+  on(event: string, listener: (...args: unknown[]) => void) {
     this.eventEmitter.on(event, listener);
   }
 
-  off(event: string, listener: (...args: any[]) => void) {
+  off<K extends keyof VotingServiceEvents>(event: K, listener: (data: VotingServiceEvents[K]) => void): void;
+  off(event: string, listener: (...args: unknown[]) => void): void;
+  off(event: string, listener: (...args: unknown[]) => void) {
     this.eventEmitter.off(event, listener);
   }
 }

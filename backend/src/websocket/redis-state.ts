@@ -135,31 +135,12 @@ export class RedisStateManager {
     }
   }
 
-  // Player status management
-  async isPlayerOnline(playerId: string): Promise<boolean> {
-    try {
-      const socketId = await this.redis.get(`player:${playerId}:online`);
-      return socketId !== null;
-    } catch (error) {
-      logger.error('Failed to check player online status:', error);
-      return false;
-    }
-  }
-
   async getPlayerSocketId(playerId: string): Promise<string | null> {
     try {
       return await this.redis.get(`player:${playerId}:online`);
     } catch (error) {
       logger.error('Failed to get player socket ID:', error);
       return null;
-    }
-  }
-
-  async setPlayerOnline(playerId: string, socketId: string): Promise<void> {
-    try {
-      await this.redis.setex(`player:${playerId}:online`, this.PLAYER_ONLINE_TTL, socketId);
-    } catch (error) {
-      logger.error('Failed to set player online:', error);
     }
   }
 
@@ -229,6 +210,57 @@ export class RedisStateManager {
       logger.debug('Session state removed', { sessionId });
     } catch (error) {
       logger.error('Failed to remove session state:', error);
+    }
+  }
+
+  // Player status management
+  async setPlayerOnline(playerId: string, socketId: string): Promise<void> {
+    try {
+      await this.redis.setex(
+        `player:${playerId}:online`, 
+        this.PLAYER_ONLINE_TTL, 
+        socketId
+      );
+      
+      // Also track socket for this player
+      await this.redis.sadd(`player:${playerId}:sockets`, socketId);
+      await this.redis.expire(`player:${playerId}:sockets`, this.PLAYER_ONLINE_TTL);
+      
+      logger.debug('Player set online', { playerId, socketId });
+    } catch (error) {
+      logger.error('Failed to set player online:', error);
+    }
+  }
+
+  async setPlayerOffline(playerId: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.redis.del(`player:${playerId}:online`),
+        this.redis.del(`player:${playerId}:sockets`)
+      ]);
+      
+      logger.debug('Player set offline', { playerId });
+    } catch (error) {
+      logger.error('Failed to set player offline:', error);
+    }
+  }
+
+  async getPlayerSockets(playerId: string): Promise<string[]> {
+    try {
+      return await this.redis.smembers(`player:${playerId}:sockets`);
+    } catch (error) {
+      logger.error('Failed to get player sockets:', error);
+      return [];
+    }
+  }
+
+  async isPlayerOnline(playerId: string): Promise<boolean> {
+    try {
+      const result = await this.redis.get(`player:${playerId}:online`);
+      return result !== null;
+    } catch (error) {
+      logger.error('Failed to check if player is online:', error);
+      return false;
     }
   }
 

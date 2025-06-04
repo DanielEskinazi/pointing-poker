@@ -18,6 +18,9 @@ export enum ClientEvents {
   SESSION_JOIN = 'session:join',
   SESSION_LEAVE = 'session:leave',
   PLAYER_UPDATE = 'player:update',
+  PLAYER_REMOVE = 'player:remove',
+  PLAYER_PROMOTE = 'player:promote',
+  PLAYER_ACTIVITY = 'player:activity',
   VOTE_SUBMIT = 'vote:submit',
   VOTE_CHANGE = 'vote:change',
   CARDS_REVEAL = 'cards:reveal',
@@ -38,6 +41,9 @@ export enum ServerEvents {
   PLAYER_JOINED = 'player:joined',
   PLAYER_LEFT = 'player:left',
   PLAYER_UPDATED = 'player:updated',
+  PLAYER_REMOVED = 'player:removed',
+  PLAYER_PROMOTED = 'player:promoted',
+  PLAYER_STATUS_CHANGED = 'player:status_changed',
   VOTE_SUBMITTED = 'vote:submitted',
   VOTE_CHANGED = 'vote:changed',
   CARDS_REVEALED = 'cards:revealed',
@@ -187,6 +193,13 @@ export interface ClientEventPayloads {
     duration: number;
   };
   [ClientEvents.TIMER_STOP]: Record<string, never>;
+  [ClientEvents.PLAYER_REMOVE]: {
+    playerId: string;
+  };
+  [ClientEvents.PLAYER_PROMOTE]: {
+    playerId: string;
+  };
+  [ClientEvents.PLAYER_ACTIVITY]: Record<string, never>;
   [ClientEvents.HEARTBEAT]: {
     timestamp: number;
   };
@@ -262,6 +275,20 @@ export interface ServerEventPayloads {
   [ServerEvents.RATE_LIMIT_EXCEEDED]: {
     event: string;
     retryAfter: number;
+  };
+  [ServerEvents.PLAYER_REMOVED]: {
+    playerId: string;
+    removedBy: string;
+    playerCount: number;
+  };
+  [ServerEvents.PLAYER_PROMOTED]: {
+    newHost: PlayerInfo;
+    previousHost?: PlayerInfo;
+  };
+  [ServerEvents.PLAYER_STATUS_CHANGED]: {
+    playerId: string;
+    isOnline: boolean;
+    lastSeenAt: Date;
   };
   [ServerEvents.HEARTBEAT_RESPONSE]: {
     timestamp: number;

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Valid card values for planning poker
 const VALID_CARD_VALUES = [
-  '0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'
+  '0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕', 'coffee'
 ];
 
 // Emoji validation (basic check for single emoji)
@@ -13,18 +13,19 @@ export const SubmitVoteSchema = z.object({
     sessionId: z.string().uuid('Invalid session ID format')
   }),
   body: z.object({
-    storyId: z.string().uuid('Invalid story ID format'),
+    storyId: z.string().min(1, 'Story ID is required'), // Allow any string, not just UUID
     value: z.string()
       .min(1, 'Vote value is required')
       .max(10, 'Vote value must be 10 characters or less')
       .refine(
         (val) => VALID_CARD_VALUES.includes(val),
-        'Invalid vote value'
+        `Invalid vote value. Must be one of: ${VALID_CARD_VALUES.join(', ')}`
       ),
     confidence: z.number()
       .min(1, 'Confidence must be between 1-5')
       .max(5, 'Confidence must be between 1-5')
-      .optional()
+      .optional(),
+    playerId: z.string().min(1, 'Player ID is required') // Add playerId since we're not using auth
   })
 });
 

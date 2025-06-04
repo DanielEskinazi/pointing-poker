@@ -45,7 +45,7 @@ describe('Player Routes', () => {
         .get(`/api/sessions/${sessionId}/players`)
         .expect(200);
 
-      const playerData = response.body.data.find((p: any) => p.id === playerId);
+      const playerData = response.body.data.find((p: { id: string; hasVoted?: boolean }) => p.id === playerId);
       expect(playerData.hasVoted).toBe(true);
     });
 

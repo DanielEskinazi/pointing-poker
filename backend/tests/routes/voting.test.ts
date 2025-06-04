@@ -7,29 +7,25 @@ describe('Voting Routes', () => {
   let app: Application;
   let sessionId: string;
   let storyId: string;
-  let hostId: string;
   let hostToken: string;
   let playerId: string;
   let playerToken: string;
-  let spectatorId: string;
   let spectatorToken: string;
 
   beforeEach(async () => {
     app = createApp();
     
     // Create test session with different user types
-    const { session, host, hostToken: hToken } = await TestDataFactory.createHostSession();
+    const { session, hostToken: hToken } = await TestDataFactory.createHostSession();
     const { player, playerToken: pToken } = await TestDataFactory.createPlayerSession();
-    const { spectator, spectatorToken: sToken } = await TestDataFactory.createSpectatorSession();
+    const { spectatorToken: sToken } = await TestDataFactory.createSpectatorSession();
     const story = await TestDataFactory.createTestStory(session.id);
     
     sessionId = session.id;
     storyId = story.id;
-    hostId = host.id;
     hostToken = hToken;
     playerId = player.id;
     playerToken = pToken;
-    spectatorId = spectator.id;
     spectatorToken = sToken;
   });
 
@@ -202,7 +198,7 @@ describe('Voting Routes', () => {
         .expect(200);
 
       expect(response.body.data.revealed).toBe(false);
-      response.body.data.votes.forEach((vote: any) => {
+      response.body.data.votes.forEach((vote: { value: string | null; confidence: number | null; hasVoted: boolean }) => {
         expect(vote.value).toBeNull();
         expect(vote.confidence).toBeNull();
         expect(vote.hasVoted).toBe(true);
@@ -223,7 +219,7 @@ describe('Voting Routes', () => {
 
       expect(response.body.data.revealed).toBe(true);
       expect(response.body.data.consensus).toBeDefined();
-      response.body.data.votes.forEach((vote: any) => {
+      response.body.data.votes.forEach((vote: { value: string | null }) => {
         expect(vote.value).not.toBeNull();
       });
     });

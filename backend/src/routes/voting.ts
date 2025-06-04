@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { VotingController } from '../controllers/voting.controller';
-import { authenticate, authorizeVoter, authorizeHost } from '../middleware/auth';
+// Authentication removed for WebSocket-first approach
 import { validateRequest } from '../middleware/validation';
 import { 
   SubmitVoteSchema,
@@ -14,30 +14,23 @@ const controller = new VotingController();
 
 // Submit or update vote
 router.post('/sessions/:sessionId/vote',
-  authenticate,
-  authorizeVoter, // Checks if not spectator
   validateRequest(SubmitVoteSchema),
   controller.submitVote
 );
 
 // Get current voting state
 router.get('/sessions/:sessionId/votes',
-  authenticate,
   validateRequest(GetVotesSchema),
   controller.getVotes
 );
 
 // Game flow controls (host only)
 router.post('/sessions/:sessionId/reveal',
-  authenticate,
-  authorizeHost,
   validateRequest(RevealCardsSchema),
   controller.revealCards
 );
 
 router.post('/sessions/:sessionId/reset',
-  authenticate,
-  authorizeHost,
   validateRequest(ResetGameSchema),
   controller.resetGame
 );

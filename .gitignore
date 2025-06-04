@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 .env*
+
+# do not commit mcp configs
+.mcp.json
+

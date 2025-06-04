@@ -20,14 +20,18 @@ export class PlayerController {
           avatar: p.avatar,
           isSpectator: p.isSpectator,
           isActive: p.isActive,
+          isHost: p.isHost,
+          isOnline: p.isOnline,
+          joinedAt: p.joinedAt,
+          lastSeenAt: p.lastSeenAt,
           hasVoted: p.currentVote !== null,
-          lastSeenAt: p.lastSeenAt
+          votedInCurrentRound: p.votedInCurrentRound
         }))
       };
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to get session players');
+      this.handleError(error as Error, res, 'Failed to get session players');
     }
   };
 
@@ -58,13 +62,23 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to update player');
+      this.handleError(error as Error, res, 'Failed to update player');
     }
   };
 
   remove = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      
+      // Check if current user is the session host
+      const canRemove = await this.playerService.canRemovePlayer(req.user?.playerId || '', id);
+      if (!canRemove) {
+        res.status(403).json({
+          success: false,
+          error: 'Only session host can remove players'
+        });
+        return;
+      }
       
       await this.playerService.removePlayer(id);
       
@@ -75,18 +89,71 @@ export class PlayerController {
 
       res.json(response);
     } catch (error) {
-      this.handleError(error, res, 'Failed to remove player');
+      this.handleError(error as Error, res, 'Failed to remove player');
     }
   };
 
-  private handleError(error: any, res: Response, defaultMessage: string): void {
+  promote = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      // Check if current user is the session host
+      const canPromote = await this.playerService.canPromotePlayer(req.user?.playerId || '');
+      if (!canPromote) {
+        res.status(403).json({
+          success: false,
+          error: 'Only session host can promote players'
+        });
+        return;
+      }
+      
+      const result = await this.playerService.promoteToHost(id);
+      
+      const response: ApiResponse = {
+        success: true,
+        data: result
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error as Error, res, 'Failed to promote player');
+    }
+  };
+
+  updateActivity = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      // Verify player owns this ID
+      if (req.user?.playerId !== id) {
+        res.status(403).json({
+          success: false,
+          error: 'Cannot update other players activity'
+        });
+        return;
+      }
+
+      await this.playerService.updateLastSeen(id);
+      
+      const response: ApiResponse = {
+        success: true,
+        data: { message: 'Activity updated' }
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error as Error, res, 'Failed to update player activity');
+    }
+  };
+
+  private handleError(error: Error, res: Response, defaultMessage: string): void {
     logger.error(defaultMessage, { error: error.message, stack: error.stack });
     
     if (error.name === 'ValidationError') {
       res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.details
+        details: (error as any).details
       });
       return;
     }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CardValue, GameState, Player } from './types';
+import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote } from './types';
 import type { 
   ConnectionStatus, 
   PlayerJoinedData, 
@@ -8,10 +8,26 @@ import type {
   VoteSubmittedData,
   CardsRevealedData,
   StoryUpdatedData,
+  StoryInfo,
   TimerUpdatedData,
   SessionStateData
 } from './types/websocket';
 import { persist, clearPersistedState } from './store/middleware/persistence';
+import { votingApi } from './services/api/voting';
+import { wsClient } from './services/websocket/client';
+
+interface PlayerWithExtras {
+  id: string;
+  name: string;
+  avatar: string;
+  isSpectator: boolean;
+  isActive: boolean;
+  isHost?: boolean;
+  isOnline?: boolean;
+  joinedAt: Date;
+  lastSeenAt: Date;
+  votedInCurrentRound?: boolean;
+}
 
 interface GameStore extends GameState {
   addPlayer: (player: Player) => void;
@@ -25,6 +41,24 @@ interface GameStore extends GameState {
   joinSession: (sessionId: string) => void;
   createSession: () => string;
   sessionId: string | null;
+  
+  // Story management
+  addStory: (story: CreateStoryDto) => void;
+  updateStory: (storyId: string, updates: UpdateStoryDto) => void;
+  deleteStory: (storyId: string) => void;
+  setActiveStory: (storyId: string) => void;
+  setStories: (stories: Story[]) => void;
+  getCurrentStory: () => Story | null;
+  isCreatingStory: boolean;
+  setIsCreatingStory: (value: boolean) => void;
+  
+  // Voting management
+  submitVote: (playerId: string, value: CardValue) => Promise<void>;
+  revealVotes: () => Promise<void>;
+  resetVoting: () => Promise<void>;
+  setVotingState: (state: Partial<VotingFlowState>) => void;
+  getVoteProgress: () => { votedCount: number; totalCount: number; hasVoted: boolean };
+  calculateConsensus: (votes: Vote[]) => ConsensusData;
   
   // Connection management
   connectionStatus: ConnectionStatus;
@@ -41,9 +75,18 @@ interface GameStore extends GameState {
   handleVoteSubmitted: (data: VoteSubmittedData) => void;
   handleCardsRevealed: (data: CardsRevealedData) => void;
   handleGameReset: (data?: unknown) => void;
+  handleStoryCreated: (data: { story: StoryInfo }) => void;
   handleStoryUpdated: (data: StoryUpdatedData) => void;
+  handleStoryDeleted: (data: { storyId: string }) => void;
   handleTimerUpdated: (data: TimerUpdatedData) => void;
   handleSessionState: (data: SessionStateData) => void;
+  
+  // Player utility methods
+  getCurrentPlayerId: () => string | null;
+  getCurrentPlayer: () => Player | null;
+  isCurrentUserHost: () => boolean;
+  isCurrentUserSpectator: () => boolean;
+  getPlayerById: (playerId: string) => Player | null;
   
   // Persistence methods
   clearSession: () => void;
@@ -55,15 +98,25 @@ const initialState: GameState = {
   isRevealing: false,
   timer: 60,
   currentStory: '',
+  stories: [],
   cardValues: [1, 2, 3, 5, 8, 13, '?', 'coffee'],
   isConfigured: false,
+  voting: {
+    votes: {},
+    isRevealed: false,
+    hasVoted: false,
+    consensus: null,
+    votingResults: [],
+    currentStoryId: null,
+  },
 };
 
 export const useGameStore = create<GameStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   ...initialState,
   sessionId: null,
+  isCreatingStory: false,
   
   // Connection state
   connectionStatus: 'disconnected',
@@ -113,7 +166,6 @@ export const useGameStore = create<GameStore>()(
     set(state => ({
       isRevealing: false,
       timer: initialState.timer,
-      currentStory: initialState.currentStory,
       players: state.players.map((p) => ({
         ...p,
         selectedCard: null,
@@ -137,6 +189,233 @@ export const useGameStore = create<GameStore>()(
 
   setIsConfigured: (value) => {
     set({ isConfigured: value, lastSync: new Date() });
+  },
+
+  // Story management
+  addStory: (storyData) => {
+    // Use WebSocket to sync story creation across all clients
+    // The WebSocket response will update the state via handleStoryCreated
+    wsClient.createStory(storyData.title, storyData.description, get().stories.length);
+  },
+
+  updateStory: (storyId, updates) => {
+    // Use WebSocket to sync story updates across all clients
+    // The WebSocket response will update the state via handleStoryUpdated
+    wsClient.updateStory(storyId, updates.title, updates.description);
+  },
+
+  deleteStory: (storyId) => {
+    // Use WebSocket to sync story deletion across all clients
+    // The WebSocket response will update the state via handleStoryDeleted
+    wsClient.deleteStory(storyId);
+  },
+
+  setActiveStory: (storyId) => {
+    // Use WebSocket to sync active story change across all clients
+    const story = get().stories.find(s => s.id === storyId);
+    if (story) {
+      wsClient.updateStory(storyId, story.title, story.description);
+    }
+  },
+
+  setStories: (stories) => {
+    const activeStory = stories.find(story => story.isActive);
+    set({
+      stories,
+      currentStory: activeStory?.title || '',
+      lastSync: new Date()
+    });
+  },
+
+  getCurrentStory: () => {
+    return get().stories.find(story => story.isActive) || null;
+  },
+
+  setIsCreatingStory: (value) => {
+    set({ isCreatingStory: value });
+  },
+
+  // Voting management
+  submitVote: async (playerId, value) => {
+    const { sessionId, getCurrentStory } = get();
+    const currentStory = getCurrentStory();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+    
+    console.log('Submitting vote:', { playerId, value, currentStory, sessionId });
+    
+    try {
+      // Optimistic update
+      set(state => ({
+        ...state,
+        voting: {
+          ...state.voting,
+          votes: { ...state.voting.votes, [playerId]: value },
+          hasVoted: playerId === state.players.find(p => p.selectedCard)?.id,
+        },
+        players: state.players.map(p =>
+          p.id === playerId ? { ...p, selectedCard: value } : p
+        ),
+        lastSync: new Date()
+      }));
+
+      // Use current story ID if available, otherwise use sessionId as fallback
+      const storyId = currentStory?.id || sessionId;
+
+      console.log('API call data:', {
+        playerId,
+        value: value.toString(),
+        storyId
+      });
+
+      await votingApi.submitVote(sessionId, {
+        playerId,
+        value: value.toString(), // Convert to string for backend validation
+        storyId,
+      });
+    } catch (error) {
+      // Revert optimistic update on error
+      set(state => ({
+        ...state,
+        voting: {
+          ...state.voting,
+          votes: Object.fromEntries(
+            Object.entries(state.voting.votes).filter(([id]) => id !== playerId)
+          ),
+        },
+        players: state.players.map(p =>
+          p.id === playerId ? { ...p, selectedCard: null } : p
+        ),
+      }));
+      throw error;
+    }
+  },
+
+  revealVotes: async () => {
+    const { sessionId } = get();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+
+    try {
+      const result = await votingApi.revealCards(sessionId);
+      const consensus = get().calculateConsensus(result.data.votes);
+      
+      set(state => ({
+        ...state,
+        isRevealing: true,
+        voting: {
+          ...state.voting,
+          isRevealed: true,
+          votingResults: result.data.votes,
+          consensus,
+        },
+        players: state.players.map(p => ({ ...p, isRevealed: true })),
+        lastSync: new Date()
+      }));
+    } catch (error) {
+      console.error('Error revealing votes:', error);
+      throw error;
+    }
+  },
+
+  resetVoting: async () => {
+    const { sessionId } = get();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+
+    try {
+      await votingApi.resetGame(sessionId);
+      
+      set(state => ({
+        ...state,
+        isRevealing: false,
+        voting: {
+          votes: {},
+          isRevealed: false,
+          hasVoted: false,
+          consensus: null,
+          votingResults: [],
+          currentStoryId: state.voting.currentStoryId,
+        },
+        players: state.players.map(p => ({
+          ...p,
+          selectedCard: null,
+          isRevealed: false,
+        })),
+        lastSync: new Date()
+      }));
+    } catch (error) {
+      console.error('Error resetting voting:', error);
+      throw error;
+    }
+  },
+
+  setVotingState: (votingState) => {
+    set(state => ({
+      ...state,
+      voting: { ...state.voting, ...votingState },
+      lastSync: new Date()
+    }));
+  },
+
+  getVoteProgress: () => {
+    const state = get();
+    const votingPlayers = state.players.filter(p => !p.isSpectator && p.isOnline !== false);
+    const votedCount = Object.keys(state.voting.votes).length;
+    const currentPlayerId = state.sessionId ? localStorage.getItem(`player_${state.sessionId}`) : null;
+    const currentPlayer = state.players.find(p => p.id === currentPlayerId);
+    
+    return {
+      votedCount,
+      totalCount: votingPlayers.length,
+      hasVoted: !!currentPlayer && !!state.voting.votes[currentPlayer.id],
+      canVote: currentPlayer && !currentPlayer.isSpectator,
+      isSpectator: currentPlayer?.isSpectator || false,
+    };
+  },
+
+  calculateConsensus: (votes: Vote[]): ConsensusData => {
+    if (votes.length === 0) {
+      return { hasConsensus: false };
+    }
+
+    const numericVotes = votes
+      .map(v => v.value)
+      .filter(v => typeof v === 'number') as number[];
+
+    if (numericVotes.length === 0) {
+      return { hasConsensus: false };
+    }
+
+    // Calculate statistics
+    const average = numericVotes.reduce((sum, val) => sum + val, 0) / numericVotes.length;
+    const sorted = [...numericVotes].sort((a, b) => a - b);
+    const median = sorted.length % 2 === 0
+      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+      : sorted[Math.floor(sorted.length / 2)];
+
+    // Check for consensus (80% agreement within 1 point of median)
+    const tolerance = 1;
+    const consensusVotes = numericVotes.filter(v => Math.abs(v - median) <= tolerance);
+    const consensusPercentage = consensusVotes.length / numericVotes.length;
+    
+    const hasConsensus = consensusPercentage >= 0.8;
+    const deviation = Math.sqrt(
+      numericVotes.reduce((sum, val) => sum + Math.pow(val - average, 2), 0) / numericVotes.length
+    );
+
+    return {
+      hasConsensus,
+      suggestedValue: hasConsensus ? median : undefined,
+      averageValue: average,
+      deviation,
+    };
   },
 
   // Connection management
@@ -181,7 +460,12 @@ export const useGameStore = create<GameStore>()(
           ...p,
           name: data.player.name,
           avatar: data.player.avatar,
-          isSpectator: data.player.isSpectator
+          isSpectator: data.player.isSpectator,
+          isHost: (data.player as PlayerWithExtras).isHost,
+          isOnline: (data.player as PlayerWithExtras).isOnline,
+          lastSeenAt: data.player.lastSeenAt?.toString(),
+          joinedAt: data.player.joinedAt?.toString(),
+          votedInCurrentRound: (data.player as PlayerWithExtras).votedInCurrentRound
         } : p
       ),
       lastSync: new Date()
@@ -228,10 +512,43 @@ export const useGameStore = create<GameStore>()(
     }));
   },
 
-  handleStoryUpdated: (data: StoryUpdatedData) => {
-    set({
-      currentStory: data.story.title,
+  handleStoryCreated: (data: { story: StoryInfo }) => {
+    set(state => ({
+      stories: [...state.stories, data.story],
+      currentStory: data.story.isActive ? data.story.title : state.currentStory,
       lastSync: new Date()
+    }));
+  },
+
+  handleStoryUpdated: (data: StoryUpdatedData) => {
+    set(state => ({
+      stories: state.stories.map(story =>
+        story.id === data.story.id ? data.story : story
+      ),
+      currentStory: data.story.isActive ? data.story.title : state.currentStory,
+      lastSync: new Date()
+    }));
+  },
+
+  handleStoryDeleted: (data: { storyId: string }) => {
+    set(state => {
+      const updatedStories = state.stories.filter(story => story.id !== data.storyId);
+      const deletedStory = state.stories.find(story => story.id === data.storyId);
+      
+      let newCurrentStory = state.currentStory;
+      if (deletedStory?.isActive && updatedStories.length > 0) {
+        // If we deleted the active story, make the first remaining story active
+        updatedStories[0].isActive = true;
+        newCurrentStory = updatedStories[0].title;
+      } else if (updatedStories.length === 0) {
+        newCurrentStory = '';
+      }
+      
+      return {
+        stories: updatedStories,
+        currentStory: newCurrentStory,
+        lastSync: new Date()
+      };
     });
   },
 
@@ -242,7 +559,7 @@ export const useGameStore = create<GameStore>()(
     });
   },
 
-  handleSessionState: (data: SessionStateData | any) => {
+  handleSessionState: (data: SessionStateData) => {
     const timestamp = new Date().toISOString();
     console.log(`[Store][${timestamp}] handleSessionState called with:`, {
       dataKeys: Object.keys(data),
@@ -257,14 +574,19 @@ export const useGameStore = create<GameStore>()(
       console.log(`[Store][${timestamp}] Processing players:`, data.players.length, data.players);
       console.log(`[Store][${timestamp}] Session config received:`, data.config);
       
-      const updates: any = {
-        players: data.players.map((p: any) => ({
+      const updates: Record<string, unknown> = {
+        players: data.players.map((p: PlayerWithExtras) => ({
           id: p.id,
           name: p.name,
           avatar: p.avatar,
           selectedCard: null,
           isRevealed: false,
-          isSpectator: p.isSpectator || false
+          isSpectator: p.isSpectator || false,
+          isHost: p.isHost || false,
+          isOnline: p.isOnline ?? true,
+          lastSeenAt: p.lastSeenAt,
+          joinedAt: p.joinedAt,
+          votedInCurrentRound: p.votedInCurrentRound || false
         })),
         currentStory: data.currentStory?.title,
         timer: data.timer?.remainingTime || data.timer?.duration || 60,
@@ -298,6 +620,33 @@ export const useGameStore = create<GameStore>()(
     }
   },
 
+  // Player utility methods
+  getCurrentPlayerId: () => {
+    const sessionId = get().sessionId;
+    return sessionId ? localStorage.getItem(`player_${sessionId}`) : null;
+  },
+
+  getCurrentPlayer: () => {
+    const state = get();
+    const playerId = state.sessionId ? localStorage.getItem(`player_${state.sessionId}`) : null;
+    return state.players.find(p => p.id === playerId) || null;
+  },
+
+  isCurrentUserHost: () => {
+    const currentPlayer = get().getCurrentPlayer();
+    return currentPlayer?.isHost || false;
+  },
+
+  isCurrentUserSpectator: () => {
+    const currentPlayer = get().getCurrentPlayer();
+    return currentPlayer?.isSpectator || false;
+  },
+
+  getPlayerById: (playerId: string) => {
+    const state = get();
+    return state.players.find(p => p.id === playerId) || null;
+  },
+
   // Persistence methods
   clearSession: async () => {
     await clearPersistedState();
@@ -329,9 +678,11 @@ export const useGameStore = create<GameStore>()(
     },
     game: {
       currentStory: state.currentStory,
+      stories: state.stories,
       isRevealing: state.isRevealing,
       timer: state.timer,
-      players: state.players
+      players: state.players,
+      voting: state.voting
     },
     ui: {}
   }),

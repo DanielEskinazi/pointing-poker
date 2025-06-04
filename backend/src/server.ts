@@ -5,6 +5,7 @@ import { db } from './database';
 import { WebSocketServer } from './websocket';
 import { setWebSocketServer } from './routes/websocket';
 import { setWebSocketServerForSession } from './services/session.service';
+import { setWebSocketServerForVoting } from './services/voting.service';
 
 const startServer = async (): Promise<void> => {
   try {
@@ -23,6 +24,7 @@ const startServer = async (): Promise<void> => {
     // Inject WebSocket server into routes and services
     setWebSocketServer(wsServer);
     setWebSocketServerForSession(wsServer);
+    setWebSocketServerForVoting(wsServer);
     logger.info('WebSocket server initialized');
 
     // Start the server

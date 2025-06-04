@@ -54,21 +54,13 @@ Components are functional with TypeScript and follow a presentational pattern:
 
 ## MCP Tools
 
-### GitHub Integration
+
+### GitHub MCP Tool
 
 **Repository Information:**
 
-- **Owner**: DanielEskinazi
-- **Repository Name**: pointing-poker
-- **Full Repository**: DanielEskinazi/pointing-poker
-
-When working with GitHub-related tasks, utilize the GitHub MCP server tools (prefixed with `mcp__github__`) when appropriate:
-
-- **Pull Requests**: Use `mcp__github__create_pull_request` for creating PRs instead of gh CLI
-- **Issues**: Use GitHub MCP tools for creating, updating, and searching issues
-- **Code Search**: Use `mcp__github__search_code` for searching across repositories
-- **File Operations**: Use GitHub MCP tools for reading/updating files in remote repositories
-- **Repository Management**: Use GitHub MCP tools for creating branches, forking repos, etc.
+Default repository: DanielEskinazi/pointing-poker
+Use GitHub MCP tools (prefixed with mcp**github**) for all GitHub operations: pull requests, issues, code search, file operations, and repository management. Prefer these over CLI commands.
 
 ### Playwright MCP Tool
 

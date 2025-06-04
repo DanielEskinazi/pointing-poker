@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
 import { useJoinSession } from '../hooks/api/useSession';
@@ -8,10 +7,11 @@ const AVATARS = ['👩‍💻', '👨‍💻', '🧙‍♂️', '🦄', '🚀', 
 
 interface JoinGameProps {
   sessionId: string;
+  tabId: string;
   onJoin: (playerId: string) => void;
 }
 
-export function JoinGame({ sessionId, onJoin }: JoinGameProps) {
+export function JoinGame({ sessionId, tabId, onJoin }: JoinGameProps) {
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
   const [isJoining, setIsJoining] = useState(false);
@@ -41,16 +41,21 @@ export function JoinGame({ sessionId, onJoin }: JoinGameProps) {
         isSpectator: false
       });
 
-      // Store player ID
-      localStorage.setItem(`player_${sessionId}`, playerId);
+      // Store player ID with tab-specific key to allow multiple tabs
+      const playerKey = `player_${sessionId}_${tabId}`;
+      localStorage.setItem(playerKey, playerId);
       
       // Call onJoin immediately - backend has retry logic to handle race conditions
       onJoin(playerId);
       
+      // Clear form state after successful join
       setName('');
-    } catch (error: any) {
+      setSelectedAvatar(AVATARS[0]);
+    } catch (error) {
       console.error('Failed to join session:', error);
-      const message = error.response?.data?.message || 'Failed to join session';
+      const message = error instanceof Error && 'response' in error 
+        ? (error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Failed to join session'
+        : 'Failed to join session';
       alert(message);
     } finally {
       setIsJoining(false);
