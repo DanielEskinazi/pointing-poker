@@ -41,7 +41,8 @@ Components are functional with TypeScript and follow a presentational pattern:
 
 ## Workflow Memories
 
-- Whenever we are done implementing any work that we derive from "/specs" folder, lets move it to "/specs/archive"
+- Whenever we create bug tickets, let's add them to the "/specs/bugs" folder, once we complete bugs, let's move that .md file for the bug to "/specs/bugs/archive"
+- Whenever we come up with features, let's add them to the "/specs/features" folder, once we complete features, let's move that .md file for the feature to "/specs/features/archive"
 
 ## MCP Tools
 
