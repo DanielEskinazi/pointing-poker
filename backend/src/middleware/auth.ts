@@ -92,12 +92,37 @@ export async function authorizeHost(req: Request, res: Response, next: NextFunct
     }
 
     // Verify the user is still the host of the session
-    const sessionId = req.params.id || req.user.sessionId;
+    const sessionId = req.params.id || req.params.sessionId || req.user.sessionId;
+    
+    logger.debug('Host authorization check', {
+      route: req.route?.path,
+      paramId: req.params.id,
+      paramSessionId: req.params.sessionId,
+      userSessionId: req.user.sessionId,
+      resolvedSessionId: sessionId,
+      userId: req.user.playerId,
+      userIsHost: req.user.isHost
+    });
+    
     const session = await db.getPrisma().session.findUnique({
       where: { id: sessionId, isActive: true }
     });
 
-    if (!session || session.hostId !== req.user.playerId) {
+    if (!session) {
+      logger.warn('Session not found during host authorization', { sessionId });
+      res.status(403).json({
+        success: false,
+        error: 'Session not found'
+      });
+      return;
+    }
+
+    if (session.hostId !== req.user.playerId) {
+      logger.warn('User is not the host of the session', {
+        sessionId,
+        sessionHostId: session.hostId,
+        userId: req.user.playerId
+      });
       res.status(403).json({
         success: false,
         error: 'Not authorized to perform this action'

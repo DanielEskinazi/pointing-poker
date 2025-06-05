@@ -92,10 +92,10 @@ export class SessionService {
       const sessionResponse: SessionResponse = {
         id: session.id,
         name: session.name,
-        hostId: session.hostId!,
+        hostId: hostId,
         config: session.config as unknown as ExtendedSessionConfig,
-        isActive: session.isActive,
-        createdAt: session.createdAt,
+        isActive: session.isActive ?? true,
+        createdAt: session.createdAt ?? new Date(),
         expiresAt: session.expiresAt,
         players: [this.mapPlayerToResponse(host)],
         playerCount: 1
@@ -145,9 +145,9 @@ export class SessionService {
         name: session.name,
         hostId: session.hostId!,
         config: session.config as unknown as ExtendedSessionConfig,
-        isActive: session.isActive,
+        isActive: session.isActive ?? true,
         cardsRevealed: (session.config as unknown as ExtendedSessionConfig)?.cardsRevealed || false,
-        createdAt: session.createdAt,
+        createdAt: session.createdAt ?? new Date(),
         expiresAt: session.expiresAt,
         players: session.players.map(this.mapPlayerToResponse),
         playerCount: session.players.length
@@ -201,9 +201,9 @@ export class SessionService {
         name: session.name,
         hostId: session.hostId!,
         config: session.config as unknown as ExtendedSessionConfig,
-        isActive: session.isActive,
+        isActive: session.isActive ?? true,
         cardsRevealed: (session.config as unknown as ExtendedSessionConfig)?.cardsRevealed || false,
-        createdAt: session.createdAt,
+        createdAt: session.createdAt ?? new Date(),
         expiresAt: session.expiresAt,
         players: session.players.map(this.mapPlayerToResponse),
         playerCount: session.players.length
@@ -330,10 +330,10 @@ export class SessionService {
           id: player.id,
           name: player.name,
           avatar: player.avatar,
-          isSpectator: player.isSpectator,
-          isActive: player.isActive,
-          joinedAt: player.joinedAt,
-          lastSeenAt: player.lastSeenAt
+          isSpectator: player.isSpectator ?? false,
+          isActive: player.isActive ?? true,
+          joinedAt: player.joinedAt ?? new Date(),
+          lastSeenAt: player.lastSeenAt ?? new Date()
         };
 
         // Get current player count
@@ -367,10 +367,10 @@ export class SessionService {
       id: player.id,
       name: player.name,
       avatar: player.avatar,
-      isSpectator: player.isSpectator,
-      isActive: player.isActive,
-      joinedAt: player.joinedAt,
-      lastSeenAt: player.lastSeenAt
+      isSpectator: player.isSpectator ?? false,
+      isActive: player.isActive ?? true,
+      joinedAt: player.joinedAt ?? new Date(),
+      lastSeenAt: player.lastSeenAt ?? new Date()
     };
   }
 

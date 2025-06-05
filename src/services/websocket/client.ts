@@ -6,7 +6,7 @@ import {
   QueuedEvent, 
   ClientEventPayloads 
 } from '../../types/websocket';
-import type { Player } from '../../types';
+import type { Player, TimerConfiguration, TimerState } from '../../types';
 
 export class WebSocketClient {
   private socket: Socket | null = null;
@@ -380,6 +380,44 @@ export class WebSocketClient {
     this.emit(ClientEvents.STORY_DELETE, { storyId });
   }
 
+  // Timer management methods
+  configureTimer(config: TimerConfiguration) {
+    this.emit(ClientEvents.TIMER_START, { 
+      duration: config.duration,
+      mode: config.mode,
+      settings: config.settings
+    });
+  }
+
+  startTimer(timerState: Partial<TimerState>) {
+    this.emit(ClientEvents.TIMER_START, { 
+      duration: timerState.duration || 300,
+      startedAt: timerState.startedAt || Date.now()
+    });
+  }
+
+  pauseTimer() {
+    this.emit(ClientEvents.TIMER_STOP, {});
+  }
+
+  stopTimer() {
+    this.emit(ClientEvents.TIMER_STOP, {});
+  }
+
+  resetTimer() {
+    this.emit(ClientEvents.TIMER_STOP, {});
+  }
+
+  updateTimer(data: { addTime?: number }) {
+    // For now, we'll use timer start with updated duration
+    if (data.addTime) {
+      const currentState = useGameStore.getState().timerState;
+      this.emit(ClientEvents.TIMER_START, { 
+        duration: currentState.duration + data.addTime 
+      });
+    }
+  }
+
   disconnect() {
     // Stop activity tracking
     this.stopActivityTracking();
@@ -397,6 +435,10 @@ export class WebSocketClient {
 
   isSocketConnected(): boolean {
     return this.isConnected && this.socket?.connected === true;
+  }
+
+  isWsConnected(): boolean {
+    return this.isSocketConnected();
   }
 }
 

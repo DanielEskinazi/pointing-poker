@@ -10,6 +10,7 @@ import websocketRoutes from './routes/websocket';
 import sessionRoutes from './routes/sessions';
 import playerRoutes from './routes/players';
 import votingRoutes from './routes/voting';
+import storyRoutes from './routes/stories';
 
 export const createApp = (): Application => {
   const app = express();
@@ -41,6 +42,7 @@ export const createApp = (): Application => {
   app.use('/api/sessions', sessionRoutes);
   app.use('/api', playerRoutes);
   app.use('/api', votingRoutes);
+  app.use('/api/stories', storyRoutes);
 
   // Error handling
   app.use(notFoundHandler);

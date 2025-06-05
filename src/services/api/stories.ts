@@ -1,4 +1,4 @@
-import { client } from './client';
+import { apiClient } from './client';
 import type { Story, CreateStoryDto, UpdateStoryDto, ApiResponse } from '../../types';
 
 export const storiesApi = {
@@ -6,7 +6,7 @@ export const storiesApi = {
    * Create a new story in a session
    */
   async createStory(sessionId: string, storyData: CreateStoryDto): Promise<Story> {
-    const response = await client.post<ApiResponse<Story>>(
+    const response = await apiClient.post<ApiResponse<Story>>(
       `/sessions/${sessionId}/stories`,
       storyData
     );
@@ -17,7 +17,7 @@ export const storiesApi = {
    * Get all stories for a session
    */
   async getStories(sessionId: string): Promise<Story[]> {
-    const response = await client.get<ApiResponse<Story[]>>(
+    const response = await apiClient.get<ApiResponse<Story[]>>(
       `/sessions/${sessionId}/stories`
     );
     return response.data.data;
@@ -27,7 +27,7 @@ export const storiesApi = {
    * Update a story
    */
   async updateStory(storyId: string, updates: UpdateStoryDto): Promise<Story> {
-    const response = await client.put<ApiResponse<Story>>(
+    const response = await apiClient.put<ApiResponse<Story>>(
       `/stories/${storyId}`,
       updates
     );
@@ -38,14 +38,14 @@ export const storiesApi = {
    * Delete a story
    */
   async deleteStory(storyId: string): Promise<void> {
-    await client.delete(`/stories/${storyId}`);
+    await apiClient.delete(`/stories/${storyId}`);
   },
 
   /**
    * Set a story as active
    */
   async setActiveStory(sessionId: string, storyId: string): Promise<Story> {
-    const response = await client.put<ApiResponse<Story>>(
+    const response = await apiClient.put<ApiResponse<Story>>(
       `/sessions/${sessionId}/stories/${storyId}/activate`
     );
     return response.data.data;
@@ -55,7 +55,7 @@ export const storiesApi = {
    * Complete a story with final estimate
    */
   async completeStory(storyId: string, finalEstimate: string): Promise<Story> {
-    const response = await client.put<ApiResponse<Story>>(
+    const response = await apiClient.put<ApiResponse<Story>>(
       `/stories/${storyId}/complete`,
       { finalEstimate }
     );

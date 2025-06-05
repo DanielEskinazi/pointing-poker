@@ -14,10 +14,38 @@ export interface Player {
   votedInCurrentRound?: boolean;
 }
 
+export interface TimerConfiguration {
+  mode: 'countdown' | 'stopwatch' | 'none';
+  duration: number; // seconds
+  settings: {
+    autoReveal: boolean;
+    autoSkip: boolean;
+    audioEnabled: boolean;
+    warningAt: number[]; // seconds remaining for warnings
+  };
+}
+
+export interface TimerState {
+  mode: 'countdown' | 'stopwatch' | 'none';
+  duration: number; // seconds
+  remaining: number; // seconds
+  isRunning: boolean;
+  isPaused: boolean;
+  startedAt: number | null; // timestamp
+  pausedAt: number | null; // timestamp
+  settings: {
+    autoReveal: boolean;
+    autoSkip: boolean;
+    audioEnabled: boolean;
+    warningAt: number[]; // seconds remaining for warnings
+  };
+}
+
 export interface GameState {
   players: Player[];
   isRevealing: boolean;
-  timer: number;
+  timer: number; // Legacy field - keep for compatibility
+  timerState: TimerState;
   currentStory: string;
   stories: Story[];
   cardValues: CardValue[];

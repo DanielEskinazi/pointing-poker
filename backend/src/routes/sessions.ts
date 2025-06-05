@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { SessionController } from '../controllers/session.controller';
+import { StoryController } from '../controllers/story.controller';
 import { validateRequest } from '../middleware/validation';
 import { authenticate, authorizeHost } from '../middleware/auth';
 import {
@@ -9,9 +10,15 @@ import {
   UpdateSessionSchema,
   DeleteSessionSchema
 } from '../validation/session.schemas';
+import {
+  CreateStorySchema,
+  GetSessionStoriesSchema,
+  SetActiveStorySchema
+} from '../validation/story.schemas';
 
 const router = Router();
 const controller = new SessionController();
+const storyController = new StoryController();
 
 // Public routes
 
@@ -54,6 +61,33 @@ router.delete(
   authorizeHost,
   validateRequest(DeleteSessionSchema),
   controller.delete
+);
+
+// Story routes for sessions
+
+// GET /api/sessions/:sessionId/stories - Get all stories for a session
+router.get(
+  '/:sessionId/stories',
+  validateRequest(GetSessionStoriesSchema),
+  storyController.getSessionStories
+);
+
+// POST /api/sessions/:sessionId/stories - Create a new story
+router.post(
+  '/:sessionId/stories',
+  authenticate,
+  authorizeHost,
+  validateRequest(CreateStorySchema),
+  storyController.createStory
+);
+
+// PUT /api/sessions/:sessionId/stories/:storyId/activate - Set story as active
+router.put(
+  '/:sessionId/stories/:storyId/activate',
+  authenticate,
+  authorizeHost,
+  validateRequest(SetActiveStorySchema),
+  storyController.setActiveStory
 );
 
 export default router;

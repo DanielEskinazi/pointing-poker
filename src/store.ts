@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote } from './types';
+import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote, TimerState, TimerConfiguration } from './types';
 import type { 
   ConnectionStatus, 
   PlayerJoinedData, 
@@ -14,6 +14,7 @@ import type {
 } from './types/websocket';
 import { persist, clearPersistedState } from './store/middleware/persistence';
 import { votingApi } from './services/api/voting';
+import { storiesApi } from './services/api/stories';
 import { wsClient } from './services/websocket/client';
 
 interface PlayerWithExtras {
@@ -42,11 +43,22 @@ interface GameStore extends GameState {
   createSession: () => string;
   sessionId: string | null;
   
+  // Enhanced timer management
+  configureTimer: (config: TimerConfiguration) => void;
+  startTimer: () => void;
+  pauseTimer: () => void;
+  resumeTimer: () => void;
+  stopTimer: () => void;
+  resetTimer: () => void;
+  addTime: (seconds: number) => void;
+  syncTimer: (state: Partial<TimerState>) => void;
+  getTimerDisplay: () => { minutes: number; seconds: number; isWarning: boolean; warningLevel: 'none' | 'low' | 'medium' | 'high' };
+  
   // Story management
-  addStory: (story: CreateStoryDto) => void;
-  updateStory: (storyId: string, updates: UpdateStoryDto) => void;
-  deleteStory: (storyId: string) => void;
-  setActiveStory: (storyId: string) => void;
+  addStory: (story: CreateStoryDto) => Promise<void>;
+  updateStory: (storyId: string, updates: UpdateStoryDto) => Promise<void>;
+  deleteStory: (storyId: string) => Promise<void>;
+  setActiveStory: (storyId: string) => Promise<void>;
   setStories: (stories: Story[]) => void;
   getCurrentStory: () => Story | null;
   isCreatingStory: boolean;
@@ -93,10 +105,27 @@ interface GameStore extends GameState {
   syncState: (data: Partial<GameState>) => void;
 }
 
+const initialTimerState: TimerState = {
+  mode: 'countdown',
+  duration: 300, // 5 minutes default
+  remaining: 300,
+  isRunning: false,
+  isPaused: false,
+  startedAt: null,
+  pausedAt: null,
+  settings: {
+    autoReveal: false,
+    autoSkip: false,
+    audioEnabled: true,
+    warningAt: [60, 30, 10] // Warning at 1 min, 30s, 10s
+  }
+};
+
 const initialState: GameState = {
   players: [],
   isRevealing: false,
   timer: 60,
+  timerState: initialTimerState,
   currentStory: '',
   stories: [],
   cardValues: [1, 2, 3, 5, 8, 13, '?', 'coffee'],
@@ -109,6 +138,66 @@ const initialState: GameState = {
     votingResults: [],
     currentStoryId: null,
   },
+};
+
+// Timer update interval manager
+let timerInterval: NodeJS.Timeout | null = null;
+
+const startTimerInterval = (store: { getState: () => any; setState: (update: any) => void }) => {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+  }
+  
+  timerInterval = setInterval(() => {
+    const state = store.getState();
+    const { timerState } = state;
+    
+    if (!timerState.isRunning || timerState.isPaused || timerState.mode === 'none') {
+      return;
+    }
+    
+    if (timerState.startedAt) {
+      const now = Date.now();
+      const elapsed = (now - timerState.startedAt) / 1000;
+      
+      let newRemaining = timerState.remaining;
+      
+      if (timerState.mode === 'countdown') {
+        newRemaining = Math.max(0, timerState.duration - elapsed);
+        
+        // Auto-stop when countdown reaches zero
+        if (newRemaining === 0) {
+          store.setState({
+            timerState: {
+              ...timerState,
+              isRunning: false,
+              remaining: 0
+            }
+          });
+          return;
+        }
+      } else if (timerState.mode === 'stopwatch') {
+        newRemaining = elapsed;
+      }
+      
+      // Update remaining time
+      if (Math.abs(newRemaining - timerState.remaining) >= 0.5) { // Update every 500ms for smooth display
+        store.setState({
+          timerState: {
+            ...timerState,
+            remaining: newRemaining
+          }
+        });
+      }
+    }
+  }, 100); // Update every 100ms for smooth display
+};
+
+const stopTimerInterval = () => {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
 };
 
 export const useGameStore = create<GameStore>()(
@@ -166,6 +255,14 @@ export const useGameStore = create<GameStore>()(
     set(state => ({
       isRevealing: false,
       timer: initialState.timer,
+      timerState: {
+        ...state.timerState,
+        isRunning: false,
+        isPaused: false,
+        startedAt: null,
+        pausedAt: null,
+        remaining: state.timerState.duration
+      },
       players: state.players.map((p) => ({
         ...p,
         selectedCard: null,
@@ -177,6 +274,222 @@ export const useGameStore = create<GameStore>()(
 
   setTimer: (time) => {
     set({ timer: time, lastSync: new Date() });
+  },
+
+  // Enhanced timer management
+  configureTimer: (config: TimerConfiguration) => {
+    set(state => ({
+      timerState: {
+        ...state.timerState,
+        mode: config.mode,
+        duration: config.duration,
+        remaining: config.duration,
+        settings: config.settings,
+        isRunning: false,
+        isPaused: false,
+        startedAt: null,
+        pausedAt: null
+      },
+      lastSync: new Date()
+    }));
+    
+    // Sync with WebSocket
+    const { sessionId } = get();
+    if (sessionId && wsClient.isWsConnected()) {
+      wsClient.configureTimer(config);
+    }
+  },
+
+  startTimer: () => {
+    const state = get();
+    if (state.timerState.mode === 'none') return;
+    
+    const now = Date.now();
+    let remaining = state.timerState.remaining;
+    
+    // If starting from paused state, maintain current remaining time but reset start time
+    if (state.timerState.isPaused) {
+      // Keep current remaining time, just reset timing
+      remaining = state.timerState.remaining;
+    } else if (!state.timerState.isRunning) {
+      // Starting fresh - use duration for countdown, 0 for stopwatch
+      remaining = state.timerState.mode === 'countdown' ? state.timerState.duration : 0;
+    }
+    
+    set(state => ({
+      timerState: {
+        ...state.timerState,
+        isRunning: true,
+        isPaused: false,
+        startedAt: now,
+        pausedAt: null,
+        remaining
+      },
+      lastSync: new Date()
+    }));
+
+    // Start the timer interval
+    startTimerInterval({ getState: get, setState: set });
+
+    // Sync with WebSocket
+    const { sessionId } = get();
+    if (sessionId && wsClient.isWsConnected()) {
+      wsClient.startTimer({ ...get().timerState, startedAt: now });
+    }
+  },
+
+  pauseTimer: () => {
+    const state = get();
+    if (!state.timerState.isRunning || state.timerState.isPaused) return;
+    
+    const now = Date.now();
+    
+    // Calculate current remaining time before pausing
+    let remaining = state.timerState.remaining;
+    if (state.timerState.startedAt) {
+      const elapsed = (now - state.timerState.startedAt) / 1000;
+      if (state.timerState.mode === 'countdown') {
+        remaining = Math.max(0, state.timerState.duration - elapsed);
+      } else {
+        remaining = elapsed;
+      }
+    }
+    
+    set(state => ({
+      timerState: {
+        ...state.timerState,
+        isRunning: false,
+        isPaused: true,
+        pausedAt: now,
+        remaining
+      },
+      lastSync: new Date()
+    }));
+
+    // Stop the timer interval
+    stopTimerInterval();
+
+    // Sync with WebSocket
+    const { sessionId } = get();
+    if (sessionId && wsClient.isWsConnected()) {
+      wsClient.pauseTimer();
+    }
+  },
+
+  resumeTimer: () => {
+    get().startTimer(); // Resume is essentially starting from current state
+  },
+
+  stopTimer: () => {
+    set(state => ({
+      timerState: {
+        ...state.timerState,
+        isRunning: false,
+        isPaused: false,
+        startedAt: null,
+        pausedAt: null,
+        remaining: state.timerState.mode === 'countdown' ? state.timerState.duration : 0
+      },
+      lastSync: new Date()
+    }));
+
+    // Stop the timer interval
+    stopTimerInterval();
+
+    // Sync with WebSocket
+    const { sessionId } = get();
+    if (sessionId && wsClient.isWsConnected()) {
+      wsClient.stopTimer();
+    }
+  },
+
+  resetTimer: () => {
+    set(state => ({
+      timerState: {
+        ...state.timerState,
+        isRunning: false,
+        isPaused: false,
+        startedAt: null,
+        pausedAt: null,
+        remaining: state.timerState.mode === 'countdown' ? state.timerState.duration : 0
+      },
+      lastSync: new Date()
+    }));
+
+    // Stop the timer interval
+    stopTimerInterval();
+
+    // Sync with WebSocket
+    const { sessionId } = get();
+    if (sessionId && wsClient.isWsConnected()) {
+      wsClient.resetTimer();
+    }
+  },
+
+  addTime: (seconds: number) => {
+    set(state => {
+      const newDuration = state.timerState.duration + seconds;
+      const newRemaining = state.timerState.remaining + seconds;
+      
+      return {
+        timerState: {
+          ...state.timerState,
+          duration: newDuration,
+          remaining: Math.max(0, newRemaining)
+        },
+        lastSync: new Date()
+      };
+    });
+
+    // Sync with WebSocket
+    const { sessionId } = get();
+    if (sessionId && wsClient.isWsConnected()) {
+      wsClient.updateTimer({ addTime: seconds });
+    }
+  },
+
+  syncTimer: (timerUpdate: Partial<TimerState>) => {
+    set(state => ({
+      timerState: {
+        ...state.timerState,
+        ...timerUpdate
+      },
+      lastSync: new Date()
+    }));
+  },
+
+  getTimerDisplay: () => {
+    const state = get();
+    const { timerState } = state;
+    
+    if (timerState.mode === 'none') {
+      return { minutes: 0, seconds: 0, isWarning: false, warningLevel: 'none' as const };
+    }
+    
+    // Use the current remaining time from state (updated by interval)
+    const displayTime = timerState.remaining;
+    
+    const minutes = Math.floor(displayTime / 60);
+    const seconds = Math.floor(displayTime % 60);
+    
+    // Determine warning level for countdown mode
+    let warningLevel: 'none' | 'low' | 'medium' | 'high' = 'none';
+    let isWarning = false;
+    
+    if (timerState.mode === 'countdown') {
+      if (displayTime <= 10) {
+        warningLevel = 'high';
+        isWarning = true;
+      } else if (displayTime <= 30) {
+        warningLevel = 'medium';
+        isWarning = true;
+      } else if (displayTime <= 60) {
+        warningLevel = 'low';
+        isWarning = true;
+      }
+    }
+    
+    return { minutes, seconds, isWarning, warningLevel };
   },
 
   setCurrentStory: (story) => {
@@ -192,29 +505,121 @@ export const useGameStore = create<GameStore>()(
   },
 
   // Story management
-  addStory: (storyData) => {
-    // Use WebSocket to sync story creation across all clients
-    // The WebSocket response will update the state via handleStoryCreated
-    wsClient.createStory(storyData.title, storyData.description, get().stories.length);
+  addStory: async (storyData) => {
+    const { sessionId } = get();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+
+    try {
+      // Create story via API first
+      const newStory = await storiesApi.createStory(sessionId, {
+        title: storyData.title,
+        description: storyData.description,
+        orderIndex: get().stories.length
+      });
+
+      // Update local state immediately (optimistic update)
+      set(state => ({
+        stories: [...state.stories, newStory],
+        currentStory: newStory.isActive ? newStory.title : state.currentStory,
+        lastSync: new Date()
+      }));
+
+      // Also sync via WebSocket for real-time updates to other clients
+      wsClient.createStory(storyData.title, storyData.description, get().stories.length - 1);
+    } catch (error) {
+      console.error('Error creating story:', error);
+      throw error;
+    }
   },
 
-  updateStory: (storyId, updates) => {
-    // Use WebSocket to sync story updates across all clients
-    // The WebSocket response will update the state via handleStoryUpdated
-    wsClient.updateStory(storyId, updates.title, updates.description);
+  updateStory: async (storyId, updates) => {
+    try {
+      // Update story via API first
+      const updatedStory = await storiesApi.updateStory(storyId, updates);
+
+      // Update local state immediately (optimistic update)
+      set(state => ({
+        stories: state.stories.map(story =>
+          story.id === storyId ? updatedStory : story
+        ),
+        currentStory: updatedStory.isActive ? updatedStory.title : state.currentStory,
+        lastSync: new Date()
+      }));
+
+      // Also sync via WebSocket for real-time updates to other clients
+      wsClient.updateStory(storyId, updates.title, updates.description);
+    } catch (error) {
+      console.error('Error updating story:', error);
+      throw error;
+    }
   },
 
-  deleteStory: (storyId) => {
-    // Use WebSocket to sync story deletion across all clients
-    // The WebSocket response will update the state via handleStoryDeleted
-    wsClient.deleteStory(storyId);
+  deleteStory: async (storyId) => {
+    try {
+      // Delete story via API first
+      await storiesApi.deleteStory(storyId);
+
+      // Update local state immediately (optimistic update)
+      set(state => {
+        const updatedStories = state.stories.filter(story => story.id !== storyId);
+        const deletedStory = state.stories.find(story => story.id === storyId);
+        
+        let newCurrentStory = state.currentStory;
+        if (deletedStory?.isActive && updatedStories.length > 0) {
+          // If we deleted the active story, make the first remaining story active
+          updatedStories[0].isActive = true;
+          newCurrentStory = updatedStories[0].title;
+        } else if (updatedStories.length === 0) {
+          newCurrentStory = '';
+        }
+        
+        return {
+          stories: updatedStories,
+          currentStory: newCurrentStory,
+          lastSync: new Date()
+        };
+      });
+
+      // Also sync via WebSocket for real-time updates to other clients
+      wsClient.deleteStory(storyId);
+    } catch (error) {
+      console.error('Error deleting story:', error);
+      throw error;
+    }
   },
 
-  setActiveStory: (storyId) => {
-    // Use WebSocket to sync active story change across all clients
-    const story = get().stories.find(s => s.id === storyId);
-    if (story) {
-      wsClient.updateStory(storyId, story.title, story.description);
+  setActiveStory: async (storyId) => {
+    const { sessionId } = get();
+    
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
+
+    try {
+      // Set active story via API first
+      const activeStory = await storiesApi.setActiveStory(sessionId, storyId);
+
+      // Update local state immediately (optimistic update)
+      set(state => ({
+        stories: state.stories.map(story => ({
+          ...story,
+          isActive: story.id === storyId
+        })),
+        currentStory: activeStory.title,
+        lastSync: new Date()
+      }));
+
+      // Also sync via WebSocket for real-time updates to other clients
+      const story = get().stories.find(s => s.id === storyId);
+      if (story) {
+        wsClient.updateStory(storyId, story.title, story.description);
+      }
+    } catch (error) {
+      console.error('Error setting active story:', error);
+      throw error;
     }
   },
 
@@ -237,11 +642,16 @@ export const useGameStore = create<GameStore>()(
 
   // Voting management
   submitVote: async (playerId, value) => {
-    const { sessionId, getCurrentStory } = get();
+    const { sessionId, getCurrentStory, stories } = get();
     const currentStory = getCurrentStory();
     
     if (!sessionId) {
       throw new Error('No session ID available');
+    }
+
+    // If no current story exists, we can't vote - throw helpful error
+    if (!currentStory && stories.length === 0) {
+      throw new Error('No story available to vote on. Please create a story first.');
     }
     
     console.log('Submitting vote:', { playerId, value, currentStory, sessionId });
@@ -253,7 +663,8 @@ export const useGameStore = create<GameStore>()(
         voting: {
           ...state.voting,
           votes: { ...state.voting.votes, [playerId]: value },
-          hasVoted: playerId === state.players.find(p => p.selectedCard)?.id,
+          hasVoted: true,
+          currentStoryId: currentStory?.id || null,
         },
         players: state.players.map(p =>
           p.id === playerId ? { ...p, selectedCard: value } : p
@@ -261,8 +672,18 @@ export const useGameStore = create<GameStore>()(
         lastSync: new Date()
       }));
 
-      // Use current story ID if available, otherwise use sessionId as fallback
-      const storyId = currentStory?.id || sessionId;
+      // Use current story ID if available, otherwise create a default story for voting
+      let storyId = currentStory?.id;
+      
+      if (!storyId) {
+        // If we have no current story but have stories, use the first one
+        if (stories.length > 0) {
+          storyId = stories[0].id;
+        } else {
+          // Create a default story for immediate voting
+          storyId = `default-story-${sessionId}`;
+        }
+      }
 
       console.log('API call data:', {
         playerId,
@@ -272,10 +693,13 @@ export const useGameStore = create<GameStore>()(
 
       await votingApi.submitVote(sessionId, {
         playerId,
-        value: value.toString(), // Convert to string for backend validation
+        value: value.toString(),
         storyId,
       });
+      
+      console.log('Vote submitted successfully');
     } catch (error) {
+      console.error('Vote submission failed:', error);
       // Revert optimistic update on error
       set(state => ({
         ...state,
@@ -284,6 +708,7 @@ export const useGameStore = create<GameStore>()(
           votes: Object.fromEntries(
             Object.entries(state.voting.votes).filter(([id]) => id !== playerId)
           ),
+          hasVoted: false,
         },
         players: state.players.map(p =>
           p.id === playerId ? { ...p, selectedCard: null } : p
@@ -669,20 +1094,30 @@ export const useGameStore = create<GameStore>()(
 {
   name: 'planning-poker-store',
   partialize: (state) => ({
+    version: 1,
+    timestamp: Date.now(),
     session: {
       id: state.sessionId,
       config: {
-        cardValues: state.cardValues,
-        isConfigured: state.isConfigured
+        cardValues: state.cardValues || [1, 2, 3, 5, 8, 13, '?', 'coffee'],
+        isConfigured: state.isConfigured || false
       }
     },
     game: {
-      currentStory: state.currentStory,
-      stories: state.stories,
-      isRevealing: state.isRevealing,
-      timer: state.timer,
-      players: state.players,
-      voting: state.voting
+      currentStory: state.currentStory || '',
+      stories: state.stories || [],
+      isRevealing: state.isRevealing || false,
+      timer: state.timer || 60,
+      timerState: state.timerState || initialTimerState,
+      players: state.players || [],
+      voting: state.voting || {
+        votes: {},
+        isRevealed: false,
+        hasVoted: false,
+        consensus: null,
+        votingResults: [],
+        currentStoryId: null,
+      }
     },
     ui: {}
   }),
