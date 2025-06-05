@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
 import { useJoinSession } from '../hooks/api/useSession';
+import { authTokenManager } from '../services/auth/tokenManager';
+import { apiClient } from '../services/api/client';
 
 const AVATARS = ['👩‍💻', '👨‍💻', '🧙‍♂️', '🦄', '🚀', '🎮', '🤖', '🦸‍♂️'];
 
@@ -40,6 +42,16 @@ export function JoinGame({ sessionId, tabId, onJoin }: JoinGameProps) {
         isRevealed: false,
         isSpectator: false
       });
+
+      // Set session context for API client
+      apiClient.setSessionContext(sessionId);
+      authTokenManager.setSessionContext(sessionId);
+
+      // Store auth token with tab specificity
+      if (result.data.token) {
+        // Players are not hosts
+        authTokenManager.setToken(result.data.token, false);
+      }
 
       // Store player ID with tab-specific key to allow multiple tabs
       const playerKey = `player_${sessionId}_${tabId}`;

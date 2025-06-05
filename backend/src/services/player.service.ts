@@ -64,12 +64,12 @@ export class PlayerService {
         id: player.id,
         name: player.name,
         avatar: player.avatar,
-        isSpectator: player.isSpectator,
-        isActive: player.isActive,
+        isSpectator: player.isSpectator ?? false,
+        isActive: player.isActive ?? true,
         isHost: session?.hostId === player.id,
-        isOnline: now.getTime() - player.lastSeenAt.getTime() < ONLINE_THRESHOLD,
-        joinedAt: player.joinedAt,
-        lastSeenAt: player.lastSeenAt,
+        isOnline: now.getTime() - (player.lastSeenAt?.getTime() ?? now.getTime()) < ONLINE_THRESHOLD,
+        joinedAt: player.joinedAt ?? new Date(),
+        lastSeenAt: player.lastSeenAt ?? new Date(),
         currentVote: player.votes.length > 0 ? player.votes[0].value : null,
         votedInCurrentRound: player.votes.length > 0
       }));

@@ -775,7 +775,7 @@ export class ConnectionManager {
       await this.redisState.updateConnectionActivity(socket.id);
 
       // Check if player status changed (online/offline)
-      const isOnline = new Date().getTime() - updatedPlayer.lastSeenAt.getTime() < 5 * 60 * 1000;
+      const isOnline = new Date().getTime() - (updatedPlayer.lastSeenAt?.getTime() ?? new Date().getTime()) < 5 * 60 * 1000;
 
       // Broadcast status change to session
       io.to(`session:${connection.sessionId}`).emit(ServerEvents.PLAYER_STATUS_CHANGED, {
@@ -795,19 +795,19 @@ export class ConnectionManager {
     id: string; 
     name: string; 
     avatar: string; 
-    isSpectator: boolean; 
-    isActive: boolean; 
-    joinedAt: Date; 
-    lastSeenAt: Date; 
+    isSpectator: boolean | null; 
+    isActive: boolean | null; 
+    joinedAt: Date | null; 
+    lastSeenAt: Date | null; 
   }): PlayerInfo {
     return {
       id: player.id,
       name: player.name,
       avatar: player.avatar,
-      isSpectator: player.isSpectator,
-      isActive: player.isActive,
-      joinedAt: player.joinedAt,
-      lastSeenAt: player.lastSeenAt
+      isSpectator: player.isSpectator ?? false,
+      isActive: player.isActive ?? true,
+      joinedAt: player.joinedAt ?? new Date(),
+      lastSeenAt: player.lastSeenAt ?? new Date()
     };
   }
 
@@ -817,7 +817,7 @@ export class ConnectionManager {
     description: string | null; 
     finalEstimate: string | null; 
     orderIndex: number; 
-    isActive: boolean; 
+    isActive: boolean | null; 
   }): StoryInfo {
     return {
       id: story.id,
@@ -825,7 +825,7 @@ export class ConnectionManager {
       description: story.description || undefined,
       finalEstimate: story.finalEstimate || undefined,
       orderIndex: story.orderIndex,
-      isActive: story.isActive
+      isActive: story.isActive ?? true
     };
   }
 

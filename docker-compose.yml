@@ -9,8 +9,8 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:3001/api
-      - VITE_WS_URL=ws://localhost:3001
+      - VITE_API_URL=http://192.168.68.58:3001/api
+      - VITE_WS_URL=ws://192.168.68.58:3001
     volumes:
       - ./src:/app/src
       - ./public:/app/public
@@ -25,7 +25,7 @@ services:
       - backend
     networks:
       - planning-poker-net
-    command: npm run dev -- --host
+    command: npm run dev -- --host 0.0.0.0
 
   # Backend API
   backend:
@@ -42,7 +42,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=dev-secret-change-in-production
-      - CLIENT_URL=http://localhost:5173
+      - CLIENT_URL=http://192.168.68.58:5173
     volumes:
       - ./backend/src:/app/src
       - ./backend/package.json:/app/package.json

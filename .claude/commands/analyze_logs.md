@@ -1,62 +1,6 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Architecture
-
-This is a client-side Planning Poker application built with React, TypeScript, and Vite. It requires no backend and uses the browser's BroadcastChannel API for real-time synchronization across tabs/windows.
-
-### State Management
-
-The application uses Zustand for global state management with a single store pattern in `src/store.ts`. The store handles:
-
-- Session management (create/join via URL parameters)
-- Player management (add/remove players, card selection)
-- Game state (current story, card reveal, timer)
-- Real-time synchronization via BroadcastChannel
-
-Key store actions:
-
-- `createSession()` - Initialize a new session
-- `joinSession(sessionId, playerName)` - Join existing session
-- `selectCard(playerId, card)` - Player card selection
-- `revealCards()` / `resetCards()` - Game flow control
-
-### Component Structure
-
-Components are functional with TypeScript and follow a presentational pattern:
-
-- `App.tsx` - Main component with routing logic (home → join → game flow)
-- `components/` - UI components that consume store state
-- All components use Framer Motion for animations
-
-### Key Technologies
-
-- **React 18.3** with TypeScript 5.5 (strict mode)
-- **Vite 5.4** for fast builds and HMR
-- **Tailwind CSS** for styling
-- **Zustand 4.5** for state management
-- **Framer Motion 11** for animations
-- **BroadcastChannel API** for real-time sync (no WebSockets needed)
-
-## Workflow Memories
-
-- Whenever we are done implementing any work that we derive from "/specs" folder, lets move it to "/specs/archive"
-
-## MCP Tools
-
-### GitHub MCP Tool
-
-**Repository Information:**
-
-Default repository: DanielEskinazi/pointing-poker
-Use GitHub MCP tools (prefixed with mcp**github**) for all GitHub operations: pull requests, issues, code search, file operations, and repository management. Prefer these over CLI commands.
-
-### Playwright MCP Tool
-
-You have access to Playwright MCP for browser automation. Can navigate pages, interact with elements, take screenshots, extract content, fill forms, and execute JavaScript. Always navigate first, wait for elements to load, use specific selectors, and close browsers when done.
-
 ## Logging
+
+> Analyze the logs to and summarize findings.
 
 Log Structure:
 
@@ -125,22 +69,3 @@ echo "=== DIAGNOSTIC REPORT $(date) ==="
   echo "───────────────────────"
   grep -E "(CRITICAL|FATAL|ERROR.*failed|timeout|disconnect)" backend/server.log | tail -5
 ) > log_diagnostic_$(date +%Y%m%d*%H%M%S).txt && echo "Report saved to: log_diagnostic*$(date +%Y%m%d\_%H%M%S).txt"
-
-# 🐳 Docker Development (No Local NPM!)
-
-```bash
-# Daily workflow
-make up          # Start all services
-make logs        # Watch logs (Ctrl+C to exit)
-make down        # Stop services
-
-# Fresh start
-make clean && make build && make up && make db-migrate && make db-seed
-
-# Quick restart: make down && make up
-# Reset database: make db-reset
-
-# Access URLs
-Frontend: http://localhost:3001
-Backend:  http://localhost:3000
-```

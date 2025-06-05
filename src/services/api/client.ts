@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { ApiResponse, ApiError } from '../../types';
+import { authTokenManager } from '../auth/tokenManager';
 
 const generateRequestId = (): string => {
   return Math.random().toString(36).substring(2, 15);
@@ -109,11 +110,13 @@ class ApiClient {
   }
   
   private getToken(): string | null {
-    return localStorage.getItem('auth_token');
+    return authTokenManager.getToken();
   }
   
   private setToken(token: string): void {
-    localStorage.setItem('auth_token', token);
+    // Note: We don't know if this is a host token here
+    // That information should be passed from the calling context
+    authTokenManager.setToken(token, false);
   }
   
   private getRefreshToken(): string | null {
@@ -121,8 +124,13 @@ class ApiClient {
   }
   
   private clearToken(): void {
-    localStorage.removeItem('auth_token');
+    authTokenManager.clearToken();
     localStorage.removeItem('refresh_token');
+  }
+  
+  // Method to set session context for the token manager
+  setSessionContext(sessionId: string): void {
+    authTokenManager.setSessionContext(sessionId);
   }
   
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {

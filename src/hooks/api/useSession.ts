@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sessionApi } from '../../services/api/sessions';
 import { JoinSessionDto, ApiError } from '../../types';
+import { authTokenManager } from '../../services/auth/tokenManager';
+import { apiClient } from '../../services/api/client';
 
 export const useSession = (sessionId: string) => {
   return useQuery({
@@ -20,12 +22,19 @@ export const useCreateSession = () => {
   return useMutation({
     mutationFn: sessionApi.create,
     onSuccess: (data) => {
+      const sessionId = data.data.session.id;
+      
       queryClient.setQueryData(
-        ['session', data.data.session.id], 
+        ['session', sessionId], 
         data.data.session
       );
       
-      localStorage.setItem('auth_token', data.data.hostToken);
+      // Set session context
+      apiClient.setSessionContext(sessionId);
+      authTokenManager.setSessionContext(sessionId);
+      
+      // Store host token with tab specificity
+      authTokenManager.setToken(data.data.hostToken, true);
     },
     onError: (error: ApiError) => {
       console.error('Session creation failed:', error.message);
@@ -40,9 +49,16 @@ export const useJoinSession = () => {
     mutationFn: ({ sessionId, ...data }: JoinSessionDto & { sessionId: string }) => 
       sessionApi.join(sessionId, data),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['session', variables.sessionId] });
+      const sessionId = variables.sessionId;
       
-      localStorage.setItem('auth_token', data.data.token);
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      
+      // Set session context
+      apiClient.setSessionContext(sessionId);
+      authTokenManager.setSessionContext(sessionId);
+      
+      // Store player token with tab specificity (not a host)
+      authTokenManager.setToken(data.data.token, false);
     },
     onError: (error: ApiError) => {
       console.error('Join session failed:', error.message);

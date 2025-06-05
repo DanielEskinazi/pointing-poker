@@ -38,22 +38,71 @@ export const persist: Persist = (config, options) => (set, get, api) => {
   
   api.subscribe(saveState);
   
+  const isValidPersistedState = (state: unknown): state is PersistedState => {
+    return state !== null && 
+           typeof state === 'object' &&
+           state !== undefined &&
+           'timestamp' in state &&
+           'version' in state &&
+           typeof (state as Record<string, unknown>).timestamp === 'number' &&
+           typeof (state as Record<string, unknown>).version === 'number' &&
+           (state as Record<string, unknown>).timestamp > 0;
+  };
+
   const rehydrate = async () => {
     try {
       const persistedState = await persistenceManager.load();
       console.log('Persistence load result:', persistedState);
       
-      if (persistedState && persistedState.timestamp && options.onRehydrateStorage) {
+      if (isValidPersistedState(persistedState) && options.onRehydrateStorage) {
         const callback = options.onRehydrateStorage();
         
+        // Validate nested structures before accessing them
+        const session = persistedState.session || {};
+        const config = session.config || {};
+        const game = persistedState.game || {};
+        
+        const defaultTimerState = {
+          mode: 'countdown' as const,
+          duration: 300,
+          remaining: 300,
+          isRunning: false,
+          isPaused: false,
+          startedAt: null,
+          pausedAt: null,
+          settings: {
+            autoReveal: false,
+            autoSkip: false,
+            audioEnabled: true,
+            warningAt: [60, 30, 10]
+          }
+        };
+        
         const stateToSet = {
-          sessionId: persistedState.session?.id || null,
-          cardValues: persistedState.session?.config?.cardValues || [],
-          isConfigured: persistedState.session?.config?.isConfigured || false,
-          currentStory: persistedState.game?.currentStory || '',
-          isRevealing: persistedState.game?.isRevealing || false,
-          timer: persistedState.game?.timer || 60,
-          players: persistedState.game?.players || [],
+          sessionId: session.id || null,
+          cardValues: Array.isArray(config.cardValues) ? config.cardValues : [1, 2, 3, 5, 8, 13, '?', 'coffee'],
+          isConfigured: Boolean(config.isConfigured),
+          currentStory: typeof game.currentStory === 'string' ? game.currentStory : '',
+          isRevealing: Boolean(game.isRevealing),
+          timer: typeof game.timer === 'number' ? game.timer : 60,
+          timerState: game.timerState && typeof game.timerState === 'object' ? {
+            ...defaultTimerState,
+            ...game.timerState,
+            settings: {
+              ...defaultTimerState.settings,
+              ...(game.timerState.settings || {})
+            }
+          } : defaultTimerState,
+          players: Array.isArray(game.players) ? game.players : [],
+          stories: Array.isArray(game.stories) ? game.stories : [],
+          voting: game.voting || {
+            votes: {},
+            isRevealed: false,
+            hasVoted: false,
+            consensus: null,
+            votingResults: [],
+            currentStoryId: null,
+          },
           lastSync: new Date()
         };
         
@@ -62,12 +111,17 @@ export const persist: Persist = (config, options) => (set, get, api) => {
         callback?.(get());
       } else {
         console.log('No valid persisted state found, using defaults');
+        if (persistedState && !isValidPersistedState(persistedState)) {
+          console.warn('Clearing invalid persisted state:', persistedState);
+          await persistenceManager.clear();
+        }
       }
     } catch (error) {
       console.error('Failed to rehydrate state:', error);
       // Clear any corrupt persistence data
       try {
         await persistenceManager.clear();
+        console.log('Cleared corrupt persistence data');
       } catch (clearError) {
         console.error('Failed to clear corrupt persistence:', clearError);
       }

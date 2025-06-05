@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,41 +8,39 @@ datasource db {
 }
 
 model Session {
-  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name      String   @db.VarChar(255)
-  passwordHash String? @map("password_hash") @db.VarChar(255)
-  hostId    String?  @map("host_id") @db.Uuid
-  config    Json     @default("{}")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name         String    @db.VarChar(255)
+  passwordHash String?   @map("password_hash") @db.VarChar(255)
+  hostId       String?   @map("host_id") @db.Uuid
+  config       Json      @default("{}")
+  isActive     Boolean?  @default(true) @map("is_active")
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  players      Player[]  @relation("SessionPlayers")
+  host         Player?   @relation("SessionHost", fields: [hostId], references: [id], onUpdate: NoAction, map: "fk_sessions_host")
+  stories      Story[]
+  votes        Vote[]
 
-  host     Player?  @relation("SessionHost", fields: [hostId], references: [id], onDelete: SetNull)
-  players  Player[] @relation("SessionPlayers")
-  stories  Story[]
-  votes    Vote[]
-
-  @@index([isActive, expiresAt], name: "idx_sessions_active")
+  @@index([isActive, expiresAt], map: "idx_sessions_active")
   @@map("sessions")
 }
 
 model Player {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  sessionId   String   @map("session_id") @db.Uuid
-  name        String   @db.VarChar(100)
-  avatar      String   @db.VarChar(50)
-  isSpectator Boolean  @default(false) @map("is_spectator")
-  isActive    Boolean  @default(true) @map("is_active")
-  joinedAt    DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
-  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-
-  session        Session   @relation("SessionPlayers", fields: [sessionId], references: [id], onDelete: Cascade)
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sessionId      String    @map("session_id") @db.Uuid
+  name           String    @db.VarChar(100)
+  avatar         String    @db.VarChar(50)
+  isSpectator    Boolean?  @default(false) @map("is_spectator")
+  isActive       Boolean?  @default(true) @map("is_active")
+  joinedAt       DateTime? @default(now()) @map("joined_at") @db.Timestamptz(6)
+  lastSeenAt     DateTime? @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  session        Session   @relation("SessionPlayers", fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   hostedSessions Session[] @relation("SessionHost")
   votes          Vote[]
 
   @@unique([sessionId, name])
-  @@index([sessionId, isActive], name: "idx_players_session")
+  @@index([sessionId, isActive], map: "idx_players_session")
   @@map("players")
 }
 
@@ -56,32 +51,30 @@ model Story {
   description   String?
   finalEstimate String?   @map("final_estimate") @db.VarChar(10)
   orderIndex    Int       @map("order_index")
-  isActive      Boolean   @default(true) @map("is_active")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  isActive      Boolean?  @default(true) @map("is_active")
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
+  session       Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  votes         Vote[]
 
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  votes   Vote[]
-
-  @@index([sessionId, orderIndex], name: "idx_stories_session")
+  @@index([sessionId, orderIndex], map: "idx_stories_session")
   @@map("stories")
 }
 
 model Vote {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  storyId    String   @map("story_id") @db.Uuid
-  playerId   String   @map("player_id") @db.Uuid
-  sessionId  String   @map("session_id") @db.Uuid
-  value      String   @db.VarChar(10)
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  storyId    String    @map("story_id") @db.Uuid
+  playerId   String    @map("player_id") @db.Uuid
+  sessionId  String    @map("session_id") @db.Uuid
+  value      String    @db.VarChar(10)
   confidence Int?
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  story   Story   @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  player     Player    @relation(fields: [playerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  session    Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  story      Story     @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([storyId, playerId])
-  @@index([storyId], name: "idx_votes_story")
-  @@index([sessionId], name: "idx_votes_session")
+  @@index([storyId], map: "idx_votes_story")
+  @@index([sessionId], map: "idx_votes_session")
   @@map("votes")
 }

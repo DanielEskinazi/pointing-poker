@@ -137,7 +137,7 @@ export class VotingService {
       return {
         success: true,
         voteId: vote.id,
-        timestamp: vote.createdAt
+        timestamp: vote.createdAt ?? new Date()
       };
     } catch (error) {
       logger.error('Failed to submit vote:', error);
@@ -177,7 +177,7 @@ export class VotingService {
         playerName: vote.player.name,
         value: vote.value,
         confidence: vote.confidence || undefined,
-        timestamp: vote.createdAt
+        timestamp: vote.createdAt ?? new Date()
       }));
     } catch (error) {
       logger.error('Failed to get votes:', error);
