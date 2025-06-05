@@ -1,8 +1,14 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# DO NOT BE LAZY
 
-# 🐳 Docker Development (No Local NPM!)
+Try to obtain as much context as possible to solve any task, if you feel you don't have the full picture, ASK!
+
+# Workflow: Work/Fix → Show → Test → Verify → Get Approval → Commit
+
+**NEVER commit without explicit user approval. ALWAYS test and verify fixes work first.**
+
+# Docker Development (No Local NPM!)
 
 # Daily workflow
 
