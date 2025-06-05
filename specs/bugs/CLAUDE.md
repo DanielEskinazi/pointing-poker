@@ -9,12 +9,12 @@
 3. **Look for edge cases** - Consider error states, race conditions, and missing data
 4. **Build & lint** - Run `npm run build` and `npm run lint` for both frontend and backend
 5. **Review related code** - Check if the fix affects other components using similar patterns
-6. **Check Logs** - Ensure the logs validate the fix, if we are missing logs to check, add them.
+6. **Check Logs** - Ensure the service logs validate the fix, if we are missing logs to check, add them.
 
 ## Show Proof of bug fix
 
 1. **Show logic** - Explain your logic to why this bug fix would work and wouldn't break other things.
-2. **Show Logs** - Show proof with logs
+2. **Show Logs** - Show proof with service logs
 3. **Show Screenshots** - If changing frontend code, show screenshots taken with playwright
 
 ## After Bug completion

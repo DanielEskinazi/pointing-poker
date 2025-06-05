@@ -269,6 +269,12 @@ export class WebSocketServer {
 
     // Listen to story service events and broadcast to WebSocket clients
     this.storyService.on('story:created', (data: { sessionId: string; story: any }) => {
+      logger.info('WebSocket: story:created event received', { 
+        sessionId: data.sessionId, 
+        storyId: data.story.id,
+        connectedSockets: this.io.sockets.sockets.size 
+      });
+      
       this.emitToSession(data.sessionId, ServerEvents.STORY_CREATED, {
         story: {
           id: data.story.id,
@@ -278,6 +284,11 @@ export class WebSocketServer {
           orderIndex: data.story.orderIndex,
           finalEstimate: data.story.finalEstimate
         }
+      });
+      
+      logger.info('WebSocket: STORY_CREATED event emitted to session', { 
+        sessionId: data.sessionId,
+        event: ServerEvents.STORY_CREATED 
       });
     });
 

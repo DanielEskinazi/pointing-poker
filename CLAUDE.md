@@ -150,3 +150,10 @@ echo "───────────────────────"
 grep -E "(CRITICAL|FATAL|ERROR.*failed|timeout|disconnect)" backend/server.log | tail -5
 ) > log_diagnostic_$(date +%Y%m%d*%H%M%S).txt && echo "Report saved to: log_diagnostic*$(date +%Y%m%d\_%H%M%S).txt"
 ```
+
+## Testing all your work
+
+1. End-to-end testing: Open multiple browser tabs, verify feature, or bugfix work on all tabs
+2. WebSocket event monitoring: Check backend logs for events being broadcast
+3. API testing: Test relevant endpoints and verify WebSocket events are triggering properly
+4. Integration testing: Run the application and manually test the specific scenario you are working on
