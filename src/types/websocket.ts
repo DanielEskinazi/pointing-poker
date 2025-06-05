@@ -28,6 +28,7 @@ export enum ClientEvents {
   STORY_UPDATE = 'story:update',
   STORY_CREATE = 'story:create',
   STORY_DELETE = 'story:delete',
+  STORY_ACTIVATE = 'story:activate',
   TIMER_START = 'timer:start',
   TIMER_STOP = 'timer:stop',
   HEARTBEAT = 'heartbeat'
@@ -51,6 +52,7 @@ export enum ServerEvents {
   STORY_UPDATED = 'story:updated',
   STORY_CREATED = 'story:created',
   STORY_DELETED = 'story:deleted',
+  STORY_ACTIVATED = 'story:activated',
   TIMER_UPDATED = 'timer:updated',
   CONNECTION_ERROR = 'connection:error',
   RATE_LIMIT_EXCEEDED = 'rate:limit',
@@ -138,6 +140,7 @@ export interface SessionStateData {
   sessionId: string;
   player: PlayerInfo;
   players: PlayerInfo[];
+  stories: StoryInfo[];
   currentStory?: StoryInfo;
   timer?: TimerState;
 }
@@ -189,6 +192,9 @@ export interface ClientEventPayloads {
   [ClientEvents.STORY_DELETE]: {
     storyId: string;
   };
+  [ClientEvents.STORY_ACTIVATE]: {
+    storyId: string;
+  };
   [ClientEvents.TIMER_START]: {
     duration: number;
   };
@@ -211,6 +217,7 @@ export interface ServerEventPayloads {
     sessionId: string;
     player: PlayerInfo;
     players: PlayerInfo[];
+    stories: StoryInfo[];
     currentStory?: StoryInfo;
     timer?: TimerState;
   };
@@ -264,6 +271,10 @@ export interface ServerEventPayloads {
   };
   [ServerEvents.STORY_DELETED]: {
     storyId: string;
+  };
+  [ServerEvents.STORY_ACTIVATED]: {
+    story: StoryInfo;
+    previousActiveStoryId?: string;
   };
   [ServerEvents.TIMER_UPDATED]: {
     timer: TimerState;

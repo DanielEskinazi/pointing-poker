@@ -67,6 +67,7 @@ export class ConnectionManager {
         sessionId,
         player: player!,
         players: sessionState.players,
+        stories: sessionState.stories,
         currentStory: sessionState.currentStory,
         timer: sessionState.timer,
         config: session?.config || {}
@@ -76,8 +77,10 @@ export class ConnectionManager {
         sessionId,
         playerId: player?.id,
         playersCount: sessionState.players.length,
+        storiesCount: sessionState.stories.length,
         hasConfig: !!session?.config,
         configData: session?.config,
+        stories: sessionState.stories.map(s => ({ id: s.id, title: s.title, isActive: s.isActive })),
         fullPayload: sessionJoinedData
       });
 
@@ -232,6 +235,11 @@ export class ConnectionManager {
     // Story deletion
     socket.on(ClientEvents.STORY_DELETE, async (data: ClientEventPayloads[ClientEvents.STORY_DELETE]) => {
       await this.handleStoryDelete(socket, io, connection, data);
+    });
+
+    // Story activation
+    socket.on(ClientEvents.STORY_ACTIVATE, async (data: ClientEventPayloads[ClientEvents.STORY_ACTIVATE]) => {
+      await this.handleStoryActivate(socket, io, connection, data);
     });
 
     // Player updates
@@ -478,6 +486,51 @@ export class ConnectionManager {
     } catch (error) {
       logger.error('Story delete error:', error);
       socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to delete story' });
+    }
+  }
+
+  private async handleStoryActivate(
+    socket: Socket, 
+    io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.STORY_ACTIVATE]
+  ): Promise<void> {
+    try {
+      // Get the currently active story before deactivating it
+      const previousActiveStory = await db.getPrisma().story.findFirst({
+        where: {
+          sessionId: connection.sessionId,
+          isActive: true
+        }
+      });
+
+      // Deactivate all stories in session
+      await db.getPrisma().story.updateMany({
+        where: {
+          sessionId: connection.sessionId,
+          isActive: true
+        },
+        data: {
+          isActive: false
+        }
+      });
+
+      // Activate the selected story
+      const updatedStory = await db.getPrisma().story.update({
+        where: { id: data.storyId },
+        data: { isActive: true }
+      });
+
+      const storyInfo = this.mapStoryToInfo(updatedStory);
+
+      io.to(`session:${connection.sessionId}`).emit(ServerEvents.STORY_ACTIVATED, {
+        story: storyInfo,
+        previousActiveStoryId: previousActiveStory?.id
+      });
+
+    } catch (error) {
+      logger.error('Story activate error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to activate story' });
     }
   }
 
@@ -835,7 +888,7 @@ export class ConnectionManager {
         where: { sessionId, isActive: true }
       }),
       db.getPrisma().story.findMany({
-        where: { sessionId, isActive: true },
+        where: { sessionId },
         orderBy: { orderIndex: 'asc' }
       })
     ]);
@@ -845,6 +898,7 @@ export class ConnectionManager {
 
     return {
       players: players.map(p => this.mapPlayerToInfo(p)),
+      stories: stories.map(s => this.mapStoryToInfo(s)),
       currentStory: currentStory ? this.mapStoryToInfo(currentStory) : undefined,
       timer: cachedState?.timer,
       votesRevealed: cachedState?.votesRevealed || false

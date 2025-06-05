@@ -90,6 +90,7 @@ interface GameStore extends GameState {
   handleStoryCreated: (data: { story: StoryInfo }) => void;
   handleStoryUpdated: (data: StoryUpdatedData) => void;
   handleStoryDeleted: (data: { storyId: string }) => void;
+  handleStoryActivated: (data: { story: StoryInfo; previousActiveStoryId?: string }) => void;
   handleTimerUpdated: (data: TimerUpdatedData) => void;
   handleSessionState: (data: SessionStateData) => void;
   
@@ -534,8 +535,7 @@ export const useGameStore = create<GameStore>()(
         lastSync: new Date()
       }));
 
-      // Also sync via WebSocket for real-time updates to other clients
-      wsClient.createStory(storyData.title, storyData.description, get().stories.length - 1);
+      // Note: WebSocket broadcast is handled by the backend API endpoint
     } catch (error) {
       console.error('Error creating story:', error);
       throw error;
@@ -620,10 +620,7 @@ export const useGameStore = create<GameStore>()(
       }));
 
       // Also sync via WebSocket for real-time updates to other clients
-      const story = get().stories.find(s => s.id === storyId);
-      if (story) {
-        wsClient.updateStory(storyId, story.title, story.description);
-      }
+      wsClient.activateStory(storyId);
     } catch (error) {
       console.error('Error setting active story:', error);
       throw error;
@@ -984,6 +981,17 @@ export const useGameStore = create<GameStore>()(
     });
   },
 
+  handleStoryActivated: (data: { story: StoryInfo; previousActiveStoryId?: string }) => {
+    set(state => ({
+      stories: state.stories.map(story => ({
+        ...story,
+        isActive: story.id === data.story.id
+      })),
+      currentStory: data.story.title,
+      lastSync: new Date()
+    }));
+  },
+
   handleTimerUpdated: (data: TimerUpdatedData) => {
     set({
       timer: data.timer.remainingTime,
@@ -996,9 +1004,11 @@ export const useGameStore = create<GameStore>()(
     console.log(`[Store][${timestamp}] handleSessionState called with:`, {
       dataKeys: Object.keys(data),
       playersCount: data.players?.length,
+      storiesCount: data.stories?.length,
       hasConfig: !!data.config,
       configKeys: data.config ? Object.keys(data.config) : [],
       cardValues: data.config?.cardValues,
+      stories: data.stories?.map(s => ({ id: s.id, title: s.title, isActive: s.isActive })) || [],
       fullData: data
     });
     
@@ -1020,6 +1030,7 @@ export const useGameStore = create<GameStore>()(
           joinedAt: p.joinedAt,
           votedInCurrentRound: p.votedInCurrentRound || false
         })),
+        stories: data.stories || [],
         currentStory: data.currentStory?.title,
         timer: data.timer?.remainingTime || data.timer?.duration || 60,
         lastSync: new Date()
@@ -1042,7 +1053,11 @@ export const useGameStore = create<GameStore>()(
         });
       }
 
-      console.log(`[Store][${timestamp}] Applying updates:`, updates);
+      console.log(`[Store][${timestamp}] Applying updates:`, {
+        ...updates,
+        storiesCount: (updates.stories as any[])?.length || 0,
+        storiesDetail: (updates.stories as any[])?.map(s => ({ id: s.id, title: s.title, isActive: s.isActive })) || []
+      });
       set(state => ({
         ...state,
         ...updates

@@ -8,6 +8,7 @@ import { ConnectionManager } from './connection-manager';
 import { RedisStateManager } from './redis-state';
 import { WebSocketRateLimiter } from './rate-limiter';
 import { VotingService } from '../services/voting.service';
+import { StoryService } from '../services/story.service';
 import { 
   ClientEvents, 
   ServerEvents, 
@@ -22,12 +23,14 @@ export class WebSocketServer {
   private redisStateManager: RedisStateManager;
   private rateLimiter: WebSocketRateLimiter;
   private votingService: VotingService;
+  private storyService: StoryService;
   private isInitialized = false;
 
   constructor() {
     this.redisStateManager = new RedisStateManager(db.getRedis());
     this.rateLimiter = new WebSocketRateLimiter(db.getRedis());
     this.votingService = new VotingService();
+    this.storyService = new StoryService();
     this.connectionManager = new ConnectionManager(
       this.redisStateManager, 
       this.rateLimiter
@@ -262,6 +265,53 @@ export class WebSocketServer {
           storyId: story?.id || ''
         });
       }).catch(error => logger.error('Failed to get current story:', error));
+    });
+
+    // Listen to story service events and broadcast to WebSocket clients
+    this.storyService.on('story:created', (data: { sessionId: string; story: any }) => {
+      this.emitToSession(data.sessionId, ServerEvents.STORY_CREATED, {
+        story: {
+          id: data.story.id,
+          title: data.story.title,
+          description: data.story.description,
+          isActive: data.story.isActive,
+          orderIndex: data.story.orderIndex,
+          finalEstimate: data.story.finalEstimate
+        }
+      });
+    });
+
+    this.storyService.on('story:updated', (data: { sessionId: string; story: any }) => {
+      this.emitToSession(data.sessionId, ServerEvents.STORY_UPDATED, {
+        story: {
+          id: data.story.id,
+          title: data.story.title,
+          description: data.story.description,
+          isActive: data.story.isActive,
+          orderIndex: data.story.orderIndex,
+          finalEstimate: data.story.finalEstimate
+        }
+      });
+    });
+
+    this.storyService.on('story:deleted', (data: { sessionId: string; storyId: string }) => {
+      this.emitToSession(data.sessionId, ServerEvents.STORY_DELETED, {
+        storyId: data.storyId
+      });
+    });
+
+    this.storyService.on('story:activated', (data: { sessionId: string; story: any; previousActiveStoryId?: string }) => {
+      this.emitToSession(data.sessionId, ServerEvents.STORY_ACTIVATED, {
+        story: {
+          id: data.story.id,
+          title: data.story.title,
+          description: data.story.description,
+          isActive: data.story.isActive,
+          orderIndex: data.story.orderIndex,
+          finalEstimate: data.story.finalEstimate
+        },
+        previousActiveStoryId: data.previousActiveStoryId
+      });
     });
 
     logger.info('Service event listeners set up successfully');
