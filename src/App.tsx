@@ -27,6 +27,8 @@ import { useSessionRecovery } from "./hooks/useSessionRecovery";
 import { useSession } from "./hooks/api/useSession";
 import { authActions } from "./store/actions/auth";
 import { ClientEvents } from "./types/websocket";
+import { apiClient } from "./services/api/client";
+import { authTokenManager } from "./services/auth/tokenManager";
 import type { CardValue } from "./types";
 
 export default function App() {
@@ -92,6 +94,12 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Set session context for API client and token manager
+    if (sessionId) {
+      apiClient.setSessionContext(sessionId);
+      authTokenManager.setSessionContext(sessionId);
+    }
+    
     // Initialize cleanup on app start
     authActions.initCleanup();
 

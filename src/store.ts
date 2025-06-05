@@ -520,10 +520,17 @@ export const useGameStore = create<GameStore>()(
         orderIndex: get().stories.length
       });
 
+      console.log('New story from API:', newStory);
+
+      // Ensure we have a valid story object
+      if (!newStory) {
+        throw new Error('API returned no story data');
+      }
+
       // Update local state immediately (optimistic update)
       set(state => ({
         stories: [...state.stories, newStory],
-        currentStory: newStory.isActive ? newStory.title : state.currentStory,
+        currentStory: (newStory.isActive ?? true) ? newStory.title : state.currentStory,
         lastSync: new Date()
       }));
 
