@@ -1,16 +1,21 @@
 # Story Synchronization Bug
 
+**GitHub Issue**: [#10](https://github.com/DanielEskinazi/pointing-poker/issues/10)  
 **Priority**: High  
 **Status**: Open  
 **Reporter**: User  
-**Date**: June 4, 2025  
+**Date**: June 5, 2025  
+**Last Updated**: June 5, 2025 - Confirmed in testing  
 **Affected Components**: WebSocket synchronization, Story management, Session state
 
 ## Summary
 
-Critical bug in story synchronization across connected users where:
-1. Active story changes are not broadcast to all users in real-time
-2. Users only see stories they created, not stories created by other users
+**CONFIRMED BUG**: Critical story synchronization failure across connected sessions where:
+1. **Story creation not broadcast**: When host creates a story, it doesn't appear on other sessions
+2. **Delayed synchronization**: Stories only appear on other sessions when active story changes
+3. **Active story display inconsistency**: Host sees active story, other sessions show "No Active Story"
+
+**Visual Evidence**: Screenshot shows host session with "Current Story: 1 (Voting)" while other session shows "No Active Story" and "No Stories Yet"
 
 ## Expected Behavior
 

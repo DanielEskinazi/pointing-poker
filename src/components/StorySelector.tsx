@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store';
+import { useToast } from './toast';
+import { getStoryErrorMessage } from '../utils/errorHandling';
 import type { Story } from '../types';
 
 interface StorySelectorProps {
@@ -10,13 +12,22 @@ interface StorySelectorProps {
 export const StorySelector = ({ compact = false }: StorySelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const { stories, getCurrentStory, setActiveStory } = useGameStore();
+  const { showToast } = useToast();
   
   const activeStory = getCurrentStory();
   const availableStories = stories.filter(story => !story.completedAt);
 
-  const handleSelectStory = (story: Story) => {
-    setActiveStory(story.id);
-    setIsOpen(false);
+  const handleSelectStory = async (story: Story) => {
+    try {
+      await setActiveStory(story.id);
+      setIsOpen(false);
+    } catch (error: any) {
+      console.error('Error setting active story:', error);
+      const errorMessage = getStoryErrorMessage(error, 'activate');
+      showToast(errorMessage.title, 'error', {
+        message: errorMessage.message
+      });
+    }
   };
 
   if (availableStories.length === 0) {

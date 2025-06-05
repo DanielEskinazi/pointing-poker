@@ -6,6 +6,7 @@ import { LoadingButton } from './loading';
 import { useToast } from './toast';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { storyValidationSchema } from '../validation/schemas';
+import { getStoryErrorMessage } from '../utils/errorHandling';
 
 interface StoryCreatorProps {
   onClose?: () => void;
@@ -31,7 +32,7 @@ export const StoryCreator = ({ onClose }: StoryCreatorProps) => {
 
     setIsSubmitting(true);
     try {
-      addStory({
+      await addStory({
         title: title.trim(),
         description: description.trim() || undefined,
       });
@@ -44,10 +45,12 @@ export const StoryCreator = ({ onClose }: StoryCreatorProps) => {
       validation.clearAllErrors();
       setIsCreatingStory(false);
       onClose?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating story:', error);
-      showToast('Failed to create story', 'error', {
-        message: 'Please try again'
+      
+      const errorMessage = getStoryErrorMessage(error, 'create');
+      showToast(errorMessage.title, 'error', {
+        message: errorMessage.message
       });
     } finally {
       setIsSubmitting(false);

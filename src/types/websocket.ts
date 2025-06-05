@@ -1,4 +1,4 @@
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+export type ConnectionStatus = 'initial' | 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
 export interface QueuedEvent {
   event: string;

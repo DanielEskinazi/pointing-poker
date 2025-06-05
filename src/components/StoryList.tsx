@@ -1,5 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store';
+import { useToast } from './toast';
+import { getStoryErrorMessage } from '../utils/errorHandling';
 import type { Story } from '../types';
 
 interface StoryItemProps {
@@ -129,13 +131,35 @@ export const StoryList = ({ onEdit, showManagementActions = true }: StoryListPro
     setIsCreatingStory,
     getCurrentStory 
   } = useGameStore();
+  const { showToast } = useToast();
 
   const activeStory = getCurrentStory();
   const sortedStories = [...stories].sort((a, b) => a.orderIndex - b.orderIndex);
 
-  const handleDeleteStory = (storyId: string) => {
+  const handleSetActiveStory = async (storyId: string) => {
+    try {
+      await setActiveStory(storyId);
+    } catch (error: any) {
+      console.error('Error setting active story:', error);
+      const errorMessage = getStoryErrorMessage(error, 'activate');
+      showToast(errorMessage.title, 'error', {
+        message: errorMessage.message
+      });
+    }
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
     if (window.confirm('Are you sure you want to delete this story? This action cannot be undone.')) {
-      deleteStory(storyId);
+      try {
+        await deleteStory(storyId);
+        showToast('Story deleted successfully', 'success');
+      } catch (error: any) {
+        console.error('Error deleting story:', error);
+        const errorMessage = getStoryErrorMessage(error, 'delete');
+        showToast(errorMessage.title, 'error', {
+          message: errorMessage.message
+        });
+      }
     }
   };
 
@@ -193,7 +217,7 @@ export const StoryList = ({ onEdit, showManagementActions = true }: StoryListPro
                   key={story.id}
                   story={story}
                   isActive={story.id === activeStory?.id}
-                  onSelect={setActiveStory}
+                  onSelect={handleSetActiveStory}
                   onEdit={showManagementActions ? onEdit : undefined}
                   onDelete={showManagementActions ? handleDeleteStory : undefined}
                 />

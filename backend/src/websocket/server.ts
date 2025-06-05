@@ -30,7 +30,7 @@ export class WebSocketServer {
     this.redisStateManager = new RedisStateManager(db.getRedis());
     this.rateLimiter = new WebSocketRateLimiter(db.getRedis());
     this.votingService = new VotingService();
-    this.storyService = new StoryService();
+    this.storyService = StoryService.getInstance();
     this.connectionManager = new ConnectionManager(
       this.redisStateManager, 
       this.rateLimiter

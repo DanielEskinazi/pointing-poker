@@ -153,6 +153,8 @@ export interface VotingFlowState {
   consensus: ConsensusData | null;
   votingResults: Vote[];
   currentStoryId: string | null;
+  voteCount?: number; // Backend-provided vote count for sync
+  totalPlayers?: number; // Backend-provided total player count for sync
 }
 
 export interface CreateSessionDto {

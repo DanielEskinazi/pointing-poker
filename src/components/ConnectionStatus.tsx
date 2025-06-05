@@ -20,6 +20,10 @@ export const ConnectionStatus = () => {
   
   const getStatusConfig = () => {
     switch (connectionStatus) {
+      case 'initial':
+        return {
+          show: false // Don't show anything in initial state
+        };
       case 'connected':
         return {
           icon: Wifi,

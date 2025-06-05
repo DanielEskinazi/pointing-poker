@@ -28,7 +28,22 @@ export interface Story {
 }
 
 export class StoryService {
+  private static instance: StoryService;
   private eventEmitter = new EventEmitter();
+
+  constructor() {
+    if (StoryService.instance) {
+      return StoryService.instance;
+    }
+    StoryService.instance = this;
+  }
+
+  static getInstance(): StoryService {
+    if (!StoryService.instance) {
+      StoryService.instance = new StoryService();
+    }
+    return StoryService.instance;
+  }
 
   async createStory(data: CreateStoryData): Promise<Story> {
     try {

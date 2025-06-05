@@ -124,6 +124,15 @@ export class VotingService {
       // Broadcast to WebSocket if available
       if (wsServer) {
         const { voteCount, totalPlayers } = await this.getVoteCounts(data.storyId);
+        
+        logger.info('Broadcasting vote submitted event', {
+          sessionId: data.sessionId,
+          playerId: data.playerId,
+          voteCount,
+          totalPlayers,
+          storyId: data.storyId
+        });
+        
         wsServer.emitToSession(data.sessionId, ServerEvents.VOTE_SUBMITTED, {
           playerId: data.playerId,
           hasVoted: true,

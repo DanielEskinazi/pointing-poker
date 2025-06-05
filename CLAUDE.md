@@ -2,6 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+# 🐳 Docker Development (No Local NPM!)
+
+# Daily workflow
+
+make up # Start all services
+
+make logs # Watch logs (Ctrl+C to exit)
+
+make down # Stop services
+
+# Fresh start
+
+make clean && make build && make up && make db-migrate && make db-seed
+
+Quick restart: make down && make up
+
+Reset database: make db-reset
+
+# Access URLs
+
+Frontend: http://localhost:3001
+Backend: http://localhost:3000
+
 ## Architecture
 
 This is a client-side Planning Poker application built with React, TypeScript, and Vite. It requires no backend and uses the browser's BroadcastChannel API for real-time synchronization across tabs/windows.
@@ -106,42 +129,24 @@ grep -E "(websocket|socket\.io|disconnect|reconnect)" backend/server.log | tail 
 
 ### Run this for a complete diagnostic report
 
-(
-echo "=== DIAGNOSTIC REPORT $(date) ==="
-  echo ""
-  echo "📊 24-HOUR SUMMARY"
-  echo "────────────────"
-  echo "Total Requests: $(grep -c "HTTP" backend/server.log)"
-  echo "Error Rate: $(echo "scale=2; $(grep -ci error backend/server.log) * 100 / $(wc -l < backend/server.log)" | bc)%"
-  echo ""
-  echo "🔴 TOP ERROR TYPES"
-  echo "─────────────────"
-  grep -i "error\|exception" backend/server.log | sed -E 's/.*\[(ERROR|error)\][ :]*//' | cut -d' ' -f1-5 | sort | uniq -c | sort -nr | head -5
-  echo ""
-  echo "⚡ PERFORMANCE METRICS"
-  echo "────────────────────"
-  grep -oE "[0-9]+ms" backend/server.log | sed 's/ms//' | awk '{sum+=$1; sumsq+=$1*$1; n++} END {if(n>0){mean=sum/n; print "Average Response: " int(mean) "ms"; print "Std Deviation: " int(sqrt(sumsq/n - mean*mean)) "ms"}}'
-  echo ""
-  echo "🔍 RECENT CRITICAL EVENTS"
-  echo "───────────────────────"
-  grep -E "(CRITICAL|FATAL|ERROR.*failed|timeout|disconnect)" backend/server.log | tail -5
-) > log_diagnostic_$(date +%Y%m%d*%H%M%S).txt && echo "Report saved to: log_diagnostic*$(date +%Y%m%d\_%H%M%S).txt"
-
-# 🐳 Docker Development (No Local NPM!)
-
 ```bash
-# Daily workflow
-make up          # Start all services
-make logs        # Watch logs (Ctrl+C to exit)
-make down        # Stop services
-
-# Fresh start
-make clean && make build && make up && make db-migrate && make db-seed
-
-# Quick restart: make down && make up
-# Reset database: make db-reset
-
-# Access URLs
-Frontend: http://localhost:3001
-Backend:  http://localhost:3000
+(echo "=== DIAGNOSTIC REPORT $(date) ==="
+echo ""
+echo "📊 24-HOUR SUMMARY"
+echo "────────────────"
+echo "Total Requests: $(grep -c "HTTP" backend/server.log)"
+echo "Error Rate: $(echo "scale=2; $(grep -ci error backend/server.log) * 100 / $(wc -l < backend/server.log)" | bc)%"
+echo ""
+echo "🔴 TOP ERROR TYPES"
+echo "─────────────────"
+grep -i "error\|exception" backend/server.log | sed -E 's/.*\[(ERROR|error)\][ :]*//' | cut -d' ' -f1-5 | sort | uniq -c | sort -nr | head -5
+echo ""
+echo "⚡ PERFORMANCE METRICS"
+echo "────────────────────"
+grep -oE "[0-9]+ms" backend/server.log | sed 's/ms//' | awk '{sum+=$1; sumsq+=$1*$1; n++} END {if(n>0){mean=sum/n; print "Average Response: " int(mean) "ms"; print "Std Deviation: " int(sqrt(sumsq/n - mean*mean)) "ms"}}'
+echo ""
+echo "🔍 RECENT CRITICAL EVENTS"
+echo "───────────────────────"
+grep -E "(CRITICAL|FATAL|ERROR.*failed|timeout|disconnect)" backend/server.log | tail -5
+) > log_diagnostic_$(date +%Y%m%d*%H%M%S).txt && echo "Report saved to: log_diagnostic*$(date +%Y%m%d\_%H%M%S).txt"
 ```
