@@ -529,11 +529,21 @@ export const useGameStore = create<GameStore>()(
       }
 
       // Update local state immediately (optimistic update)
-      set(state => ({
-        stories: [...state.stories, newStory],
-        currentStory: (newStory.isActive ?? true) ? newStory.title : state.currentStory,
-        lastSync: new Date()
-      }));
+      set(state => {
+        // Check if story already exists (WebSocket might be faster than API response)
+        const existingStory = state.stories.find(story => story.id === newStory.id);
+        if (existingStory) {
+          console.log('Story already exists from WebSocket, skipping API optimistic update:', newStory.id);
+          return state; // No changes needed
+        }
+
+        console.log('Adding story from API optimistic update:', newStory.id);
+        return {
+          stories: [...state.stories, newStory],
+          currentStory: (newStory.isActive ?? true) ? newStory.title : state.currentStory,
+          lastSync: new Date()
+        };
+      });
 
       // Note: WebSocket broadcast is handled by the backend API endpoint
     } catch (error) {
@@ -1000,6 +1010,9 @@ export const useGameStore = create<GameStore>()(
 
   handleStoryCreated: (data: { story: StoryInfo }) => {
     set(state => {
+      console.log('WebSocket handleStoryCreated received:', data.story);
+      console.log('Current stories in state:', state.stories.map(s => ({ id: s.id, title: s.title })));
+      
       // Check if story already exists (prevents duplication from optimistic updates)
       const existingStory = state.stories.find(story => story.id === data.story.id);
       if (existingStory) {
@@ -1007,6 +1020,7 @@ export const useGameStore = create<GameStore>()(
         return state; // No changes needed
       }
 
+      console.log('Adding new story from WebSocket:', data.story.id);
       return {
         stories: [...state.stories, data.story],
         currentStory: data.story.isActive ? data.story.title : state.currentStory,
