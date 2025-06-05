@@ -260,28 +260,6 @@ export default function App() {
               <JoinGame sessionId={sessionId} tabId={tabId} onJoin={setPlayerId} />
             )}
 
-            {/* Show "Join as Different Player" option when we have an active player */}
-            {currentPlayer && sessionId && (
-              <div className="text-center mb-4">
-                <button
-                  onClick={() => {
-                    // Notify server that this player is leaving the session
-                    if (connected && sessionId) {
-                      emit(ClientEvents.SESSION_LEAVE, { sessionId });
-                    }
-                    
-                    // Clear current player to allow joining as different player
-                    // Use tab-specific key for proper isolation
-                    const playerKey = `player_${sessionId}_${tabId}`;
-                    localStorage.removeItem(playerKey);
-                    setPlayerId(null);
-                  }}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                >
-                  Join as Different Player
-                </button>
-              </div>
-            )}
 
             {/* Story Management Section */}
             {currentPlayer && (
