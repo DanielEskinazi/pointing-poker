@@ -999,11 +999,20 @@ export const useGameStore = create<GameStore>()(
   },
 
   handleStoryCreated: (data: { story: StoryInfo }) => {
-    set(state => ({
-      stories: [...state.stories, data.story],
-      currentStory: data.story.isActive ? data.story.title : state.currentStory,
-      lastSync: new Date()
-    }));
+    set(state => {
+      // Check if story already exists (prevents duplication from optimistic updates)
+      const existingStory = state.stories.find(story => story.id === data.story.id);
+      if (existingStory) {
+        console.log('Story already exists, skipping WebSocket duplicate:', data.story.id);
+        return state; // No changes needed
+      }
+
+      return {
+        stories: [...state.stories, data.story],
+        currentStory: data.story.isActive ? data.story.title : state.currentStory,
+        lastSync: new Date()
+      };
+    });
   },
 
   handleStoryUpdated: (data: StoryUpdatedData) => {
