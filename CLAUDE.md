@@ -4,9 +4,15 @@
 
 Try to obtain as much context as possible to solve any task, if you feel you don't have the full picture, ASK!
 
-# Workflow: Work/Fix → Show → Test → Verify → Get Approval → Commit
+# Workflow: Work/Fix → Show → Test → Verify → Get Approval → Commit → Close Github Issue (if exists)
 
 **NEVER commit without explicit user approval. ALWAYS test and verify fixes work first.**
+
+## GitHub Issue Management
+
+- When picking up a GitHub issue to work on, use `mcp__github__get_issue` to get full details
+- When completing work on a GitHub issue, ALWAYS close it using `mcp__github__update_issue` with `"state": "closed"`
+- Add a comment to the issue summarizing what was fixed/implemented before closing
 
 # Docker Development (No Local NPM!)
 
