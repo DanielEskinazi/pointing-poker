@@ -1,5 +1,8 @@
 import { motion } from 'framer-motion';
+import { CheckCircle, AlertCircle, TrendingUp, Activity } from 'lucide-react';
 import { useGameStore } from '../store';
+import { useRealtimeStats } from '../hooks/useRealtimeStats';
+import { VoteDistributionChart } from './charts';
 
 export const VotingResults = () => {
   const { 
@@ -7,6 +10,8 @@ export const VotingResults = () => {
     players, 
     isRevealing
   } = useGameStore();
+  
+  const realtimeStats = useRealtimeStats();
 
   if (!isRevealing || !voting.isRevealed || voting.votingResults.length === 0) {
     return null;
@@ -137,12 +142,59 @@ export const VotingResults = () => {
           </div>
         </div>
 
+        {/* Real-time Statistics Summary */}
+        {realtimeStats && (
+          <div className="mb-6">
+            <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Activity className="h-5 w-5 text-blue-600" />
+              Real-time Analysis
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                <div className="text-2xl font-bold text-blue-600">{realtimeStats.mean.toFixed(1)}</div>
+                <div className="text-sm text-blue-700">Average</div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                <div className="text-2xl font-bold text-green-600">{realtimeStats.median}</div>
+                <div className="text-sm text-green-700">Median</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                <div className="text-2xl font-bold text-purple-600">{realtimeStats.standardDeviation.toFixed(1)}</div>
+                <div className="text-sm text-purple-700">Std Dev</div>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                <div className="text-2xl font-bold text-orange-600">{realtimeStats.participationRate.toFixed(0)}%</div>
+                <div className="text-sm text-orange-700">Participation</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Vote Distribution Chart */}
+        {Object.keys(votesByValue).length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-lg font-semibold text-gray-800 mb-4">Vote Distribution Chart</h4>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <VoteDistributionChart 
+                data={Object.fromEntries(
+                  Object.entries(votesByValue).map(([key, votes]) => [key, votes.length])
+                )} 
+              />
+            </div>
+          </div>
+        )}
+
         {/* Consensus & Statistics */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Consensus */}
           <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-lg p-4 border">
-            <h4 className="text-lg font-semibold text-gray-800 mb-3">
-              📊 Consensus Analysis
+            <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              {consensus?.hasConsensus ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-orange-600" />
+              )}
+              Consensus Analysis
             </h4>
             {consensus?.hasConsensus ? (
               <div>
@@ -175,11 +227,12 @@ export const VotingResults = () => {
             )}
           </div>
 
-          {/* Statistics */}
+          {/* Enhanced Statistics */}
           {statistics && (
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border">
-              <h4 className="text-lg font-semibold text-gray-800 mb-3">
-                📈 Statistics
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-purple-600" />
+                Vote Statistics
               </h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
@@ -196,6 +249,14 @@ export const VotingResults = () => {
                     {statistics.min} - {statistics.max} points
                   </span>
                 </div>
+                {realtimeStats && realtimeStats.outliers.length > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Outliers:</span>
+                    <span className="text-sm font-medium text-red-600">
+                      {realtimeStats.outliers.join(', ')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
