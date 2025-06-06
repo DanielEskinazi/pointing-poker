@@ -124,6 +124,15 @@ export class VotingService {
       // Broadcast to WebSocket if available
       if (wsServer) {
         const { voteCount, totalPlayers } = await this.getVoteCounts(data.storyId);
+        
+        logger.info('Broadcasting vote submitted event', {
+          sessionId: data.sessionId,
+          playerId: data.playerId,
+          voteCount,
+          totalPlayers,
+          storyId: data.storyId
+        });
+        
         wsServer.emitToSession(data.sessionId, ServerEvents.VOTE_SUBMITTED, {
           playerId: data.playerId,
           hasVoted: true,
@@ -218,13 +227,34 @@ export class VotingService {
       // Calculate consensus
       const consensus = this.calculateConsensus(votes);
       const statistics = this.calculateStatistics(votes);
+      
+      logger.info('Consensus calculation result', { 
+        consensus,
+        votesCount: votes.length,
+        agreement: consensus?.agreement,
+        hasHighAgreement: consensus ? consensus.agreement >= 0.8 : false
+      });
 
       // Update story with final estimate if consensus is high
-      if (consensus && consensus.agreement > 0.8) {
-        await db.getPrisma().story.update({
+      if (consensus && consensus.agreement >= 0.8) {
+        const updatedStory = await db.getPrisma().story.update({
           where: { id: currentStory.id },
           data: { finalEstimate: consensus.value }
         });
+        
+        // Emit story update event so UI updates immediately
+        if (wsServer) {
+          wsServer.emitToSession(sessionId, ServerEvents.STORY_UPDATED, {
+            story: {
+              id: updatedStory.id,
+              title: updatedStory.title,
+              description: updatedStory.description || undefined,
+              finalEstimate: updatedStory.finalEstimate || undefined,
+              orderIndex: updatedStory.orderIndex,
+              isActive: updatedStory.isActive
+            }
+          });
+        }
       }
 
       // Emit reveal event
@@ -245,7 +275,7 @@ export class VotingService {
         }));
 
         const consensusData = {
-          hasConsensus: consensus?.agreement ? consensus.agreement > 0.8 : false,
+          hasConsensus: consensus?.agreement ? consensus.agreement >= 0.8 : false,
           suggestedValue: consensus?.value,
           averageValue: consensus?.average || undefined,
           deviation: statistics?.standardDeviation

@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { VotingController } from '../controllers/voting.controller';
-// Authentication removed for WebSocket-first approach
 import { validateRequest } from '../middleware/validation';
 import { 
   SubmitVoteSchema,

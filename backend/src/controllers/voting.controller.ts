@@ -95,11 +95,19 @@ export class VotingController {
       
       const result = await this.votingService.revealCards(sessionId);
       
+      // Transform consensus to match frontend expectations
+      const consensusData = result.consensus ? {
+        hasConsensus: result.consensus.agreement >= 0.8,
+        suggestedValue: result.consensus.value,
+        averageValue: result.consensus.average || undefined,
+        deviation: undefined // Will be calculated from statistics if needed
+      } : null;
+      
       const response: ApiResponse = {
         success: true,
         data: {
           votes: result.votes,
-          consensus: result.consensus,
+          consensus: consensusData,
           statistics: result.statistics
         }
       };

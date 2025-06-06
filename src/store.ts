@@ -90,6 +90,7 @@ interface GameStore extends GameState {
   handleStoryCreated: (data: { story: StoryInfo }) => void;
   handleStoryUpdated: (data: StoryUpdatedData) => void;
   handleStoryDeleted: (data: { storyId: string }) => void;
+  handleStoryActivated: (data: { story: StoryInfo; previousActiveStoryId?: string }) => void;
   handleTimerUpdated: (data: TimerUpdatedData) => void;
   handleSessionState: (data: SessionStateData) => void;
   
@@ -208,7 +209,7 @@ export const useGameStore = create<GameStore>()(
   isCreatingStory: false,
   
   // Connection state
-  connectionStatus: 'disconnected',
+  connectionStatus: 'initial',
   connectionError: null,
   lastSync: null,
 
@@ -528,14 +529,23 @@ export const useGameStore = create<GameStore>()(
       }
 
       // Update local state immediately (optimistic update)
-      set(state => ({
-        stories: [...state.stories, newStory],
-        currentStory: (newStory.isActive ?? true) ? newStory.title : state.currentStory,
-        lastSync: new Date()
-      }));
+      set(state => {
+        // Check if story already exists (WebSocket might be faster than API response)
+        const existingStory = state.stories.find(story => story.id === newStory.id);
+        if (existingStory) {
+          console.log('Story already exists from WebSocket, skipping API optimistic update:', newStory.id);
+          return state; // No changes needed
+        }
 
-      // Also sync via WebSocket for real-time updates to other clients
-      wsClient.createStory(storyData.title, storyData.description, get().stories.length - 1);
+        console.log('Adding story from API optimistic update:', newStory.id);
+        return {
+          stories: [...state.stories, newStory],
+          currentStory: (newStory.isActive ?? true) ? newStory.title : state.currentStory,
+          lastSync: new Date()
+        };
+      });
+
+      // Note: WebSocket broadcast is handled by the backend API endpoint
     } catch (error) {
       console.error('Error creating story:', error);
       throw error;
@@ -620,10 +630,7 @@ export const useGameStore = create<GameStore>()(
       }));
 
       // Also sync via WebSocket for real-time updates to other clients
-      const story = get().stories.find(s => s.id === storyId);
-      if (story) {
-        wsClient.updateStory(storyId, story.title, story.description);
-      }
+      wsClient.activateStory(storyId);
     } catch (error) {
       console.error('Error setting active story:', error);
       throw error;
@@ -734,7 +741,6 @@ export const useGameStore = create<GameStore>()(
 
     try {
       const result = await votingApi.revealCards(sessionId);
-      const consensus = get().calculateConsensus(result.data.votes);
       
       set(state => ({
         ...state,
@@ -743,7 +749,7 @@ export const useGameStore = create<GameStore>()(
           ...state.voting,
           isRevealed: true,
           votingResults: result.data.votes,
-          consensus,
+          consensus: result.data.consensus || null,
         },
         players: state.players.map(p => ({ ...p, isRevealed: true })),
         lastSync: new Date()
@@ -799,13 +805,29 @@ export const useGameStore = create<GameStore>()(
   getVoteProgress: () => {
     const state = get();
     const votingPlayers = state.players.filter(p => !p.isSpectator && p.isOnline !== false);
-    const votedCount = Object.keys(state.voting.votes).length;
     const currentPlayerId = state.sessionId ? localStorage.getItem(`player_${state.sessionId}`) : null;
     const currentPlayer = state.players.find(p => p.id === currentPlayerId);
     
+    // Use backend-provided counts if available, otherwise fall back to local calculation
+    const votedCount = state.voting.voteCount !== undefined 
+      ? state.voting.voteCount 
+      : Object.keys(state.voting.votes).length;
+    const totalCount = state.voting.totalPlayers !== undefined 
+      ? state.voting.totalPlayers 
+      : votingPlayers.length;
+    
+    console.log('Vote progress calculation:', {
+      votedCount,
+      totalCount,
+      backendVoteCount: state.voting.voteCount,
+      backendTotalPlayers: state.voting.totalPlayers,
+      localVotesCount: Object.keys(state.voting.votes).length,
+      localPlayersCount: votingPlayers.length
+    });
+    
     return {
       votedCount,
-      totalCount: votingPlayers.length,
+      totalCount,
       hasVoted: !!currentPlayer && !!state.voting.votes[currentPlayer.id],
       canVote: currentPlayer && !currentPlayer.isSpectator,
       isSpectator: currentPlayer?.isSpectator || false,
@@ -905,19 +927,73 @@ export const useGameStore = create<GameStore>()(
   },
 
   handleVoteSubmitted: (data: VoteSubmittedData) => {
-    set(state => ({
-      players: state.players.map(p =>
+    set(state => {
+      console.log('Handling vote submitted:', data);
+      
+      // Update voting state with the global vote count from backend
+      const updatedVoting = {
+        ...state.voting,
+        voteCount: data.voteCount,
+        totalPlayers: data.totalPlayers,
+      };
+      
+      // If the vote is for a different player, add it to votes tracking
+      if (data.hasVoted && data.playerId) {
+        updatedVoting.votes = {
+          ...state.voting.votes,
+          [data.playerId]: '?' // We don't get the actual value until reveal
+        };
+      }
+      
+      const updatedPlayers = state.players.map(p =>
         p.id === data.playerId
           ? { ...p, selectedCard: data.hasVoted ? (p.selectedCard || '?') : null }
           : p
-      ),
-      lastSync: new Date()
-    }));
+      );
+      
+      const newState = {
+        players: updatedPlayers,
+        voting: updatedVoting,
+        lastSync: new Date()
+      };
+      
+      console.log('Updated state after vote submitted:', {
+        voteCount: data.voteCount,
+        totalPlayers: data.totalPlayers,
+        votesInState: Object.keys(updatedVoting.votes).length
+      });
+      
+      // Auto-reveal cards when all players have voted
+      if (data.voteCount && data.totalPlayers && data.voteCount >= data.totalPlayers && !state.isRevealing) {
+        console.log('All players have voted! Auto-revealing cards...');
+        // Use setTimeout to avoid direct state mutation during the current set call
+        setTimeout(() => {
+          get().revealVotes().catch(error => {
+            console.error('Auto-reveal failed:', error);
+          });
+        }, 100);
+      }
+      
+      return newState;
+    });
   },
 
   handleCardsRevealed: (data: CardsRevealedData) => {
     set(state => ({
       isRevealing: true,
+      voting: {
+        ...state.voting,
+        isRevealed: true,
+        votingResults: data.votes.map(v => ({
+          id: v.playerId,
+          playerId: v.playerId,
+          sessionId: state.sessionId || '',
+          storyId: data.storyId,
+          value: v.value as CardValue,
+          createdAt: new Date().toISOString()
+        })),
+        consensus: data.consensus || null
+      },
       players: state.players.map(p => {
         const vote = data.votes.find(v => v.playerId === p.id);
         return {
@@ -935,6 +1011,14 @@ export const useGameStore = create<GameStore>()(
       isRevealing: false,
       timer: initialState.timer,
       currentStory: initialState.currentStory,
+      voting: {
+        ...state.voting,
+        votes: {},
+        isRevealed: false,
+        hasVoted: false,
+        consensus: null,
+        votingResults: []
+      },
       players: state.players.map(p => ({
         ...p,
         selectedCard: null,
@@ -945,11 +1029,24 @@ export const useGameStore = create<GameStore>()(
   },
 
   handleStoryCreated: (data: { story: StoryInfo }) => {
-    set(state => ({
-      stories: [...state.stories, data.story],
-      currentStory: data.story.isActive ? data.story.title : state.currentStory,
-      lastSync: new Date()
-    }));
+    set(state => {
+      console.log('WebSocket handleStoryCreated received:', data.story);
+      console.log('Current stories in state:', state.stories.map(s => ({ id: s.id, title: s.title })));
+      
+      // Check if story already exists (prevents duplication from optimistic updates)
+      const existingStory = state.stories.find(story => story.id === data.story.id);
+      if (existingStory) {
+        console.log('Story already exists, skipping WebSocket duplicate:', data.story.id);
+        return state; // No changes needed
+      }
+
+      console.log('Adding new story from WebSocket:', data.story.id);
+      return {
+        stories: [...state.stories, data.story],
+        currentStory: data.story.isActive ? data.story.title : state.currentStory,
+        lastSync: new Date()
+      };
+    });
   },
 
   handleStoryUpdated: (data: StoryUpdatedData) => {
@@ -984,6 +1081,37 @@ export const useGameStore = create<GameStore>()(
     });
   },
 
+  handleStoryActivated: (data: { story: StoryInfo; previousActiveStoryId?: string }) => {
+    set(state => ({
+      stories: state.stories.map(story => ({
+        ...story,
+        isActive: story.id === data.story.id
+      })),
+      currentStory: data.story.title,
+      // Reset voting state for new story
+      voting: {
+        ...state.voting,
+        votes: {},
+        isRevealed: false,
+        hasVoted: false,
+        consensus: null,
+        votingResults: [],
+        currentStoryId: data.story.id,
+        voteCount: 0,
+        totalPlayers: undefined
+      },
+      // Reset player cards and voting status
+      players: state.players.map(p => ({
+        ...p,
+        selectedCard: null,
+        isRevealed: false,
+        votedInCurrentRound: false
+      })),
+      isRevealing: false,
+      lastSync: new Date()
+    }));
+  },
+
   handleTimerUpdated: (data: TimerUpdatedData) => {
     set({
       timer: data.timer.remainingTime,
@@ -996,9 +1124,11 @@ export const useGameStore = create<GameStore>()(
     console.log(`[Store][${timestamp}] handleSessionState called with:`, {
       dataKeys: Object.keys(data),
       playersCount: data.players?.length,
+      storiesCount: data.stories?.length,
       hasConfig: !!data.config,
       configKeys: data.config ? Object.keys(data.config) : [],
       cardValues: data.config?.cardValues,
+      stories: data.stories?.map(s => ({ id: s.id, title: s.title, isActive: s.isActive })) || [],
       fullData: data
     });
     
@@ -1020,6 +1150,7 @@ export const useGameStore = create<GameStore>()(
           joinedAt: p.joinedAt,
           votedInCurrentRound: p.votedInCurrentRound || false
         })),
+        stories: data.stories || [],
         currentStory: data.currentStory?.title,
         timer: data.timer?.remainingTime || data.timer?.duration || 60,
         lastSync: new Date()
@@ -1042,7 +1173,11 @@ export const useGameStore = create<GameStore>()(
         });
       }
 
-      console.log(`[Store][${timestamp}] Applying updates:`, updates);
+      console.log(`[Store][${timestamp}] Applying updates:`, {
+        ...updates,
+        storiesCount: (updates.stories as any[])?.length || 0,
+        storiesDetail: (updates.stories as any[])?.map(s => ({ id: s.id, title: s.title, isActive: s.isActive })) || []
+      });
       set(state => ({
         ...state,
         ...updates
@@ -1085,7 +1220,7 @@ export const useGameStore = create<GameStore>()(
     set({
       ...initialState,
       sessionId: null,
-      connectionStatus: 'disconnected',
+      connectionStatus: 'initial',
       connectionError: null,
       lastSync: null
     });

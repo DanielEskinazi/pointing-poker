@@ -12,7 +12,7 @@ export const votingApi = {
   },
   
   revealCards: async (sessionId: string) => {
-    return apiClient.post<RevealResult>(`/sessions/${sessionId}/reveal`);
+    return apiClient.post<RevealResult>(`/sessions/${sessionId}/reveal`, {});
   },
   
   resetGame: async (sessionId: string, newStory?: StoryData) => {

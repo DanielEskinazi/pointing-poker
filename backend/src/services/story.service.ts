@@ -28,7 +28,22 @@ export interface Story {
 }
 
 export class StoryService {
+  private static instance: StoryService;
   private eventEmitter = new EventEmitter();
+
+  constructor() {
+    if (StoryService.instance) {
+      return StoryService.instance;
+    }
+    StoryService.instance = this;
+  }
+
+  static getInstance(): StoryService {
+    if (!StoryService.instance) {
+      StoryService.instance = new StoryService();
+    }
+    return StoryService.instance;
+  }
 
   async createStory(data: CreateStoryData): Promise<Story> {
     try {
@@ -196,6 +211,14 @@ export class StoryService {
         throw new Error('Story not found');
       }
 
+      // Get the currently active story before deactivating it
+      const previousActiveStory = await db.getPrisma().story.findFirst({
+        where: {
+          sessionId: story.sessionId,
+          isActive: true
+        }
+      });
+
       // Deactivate all other stories in session
       await this.deactivateCurrentStory(story.sessionId);
 
@@ -211,10 +234,11 @@ export class StoryService {
       // Emit story activated event
       this.eventEmitter.emit('story:activated', {
         sessionId: story.sessionId,
-        story: updatedStory
+        story: updatedStory,
+        previousActiveStoryId: previousActiveStory?.id
       });
 
-      logger.info('Story activated', { storyId, sessionId: story.sessionId });
+      logger.info('Story activated', { storyId, sessionId: story.sessionId, previousActiveStoryId: previousActiveStory?.id });
 
       return {
         ...updatedStory,

@@ -135,9 +135,11 @@ export class WebSocketClient {
       console.log(`[WebSocket][${timestamp}] SESSION_JOINED event received:`, {
         sessionId: data.sessionId,
         playersCount: data.players?.length || 0,
+        storiesCount: data.stories?.length || 0,
         hasConfig: !!data.config,
         cardValues: data.config?.cardValues,
-        players: data.players?.map(p => ({ id: p.id, name: p.name }))
+        players: data.players?.map(p => ({ id: p.id, name: p.name })),
+        stories: data.stories?.map(s => ({ id: s.id, title: s.title, isActive: s.isActive })) || []
       });
       console.log(`[WebSocket][${timestamp}] Full SESSION_JOINED data:`, data);
       useGameStore.getState().handleSessionState(data);
@@ -227,6 +229,11 @@ export class WebSocketClient {
     this.socket.on(ServerEvents.STORY_DELETED, (data) => {
       console.log('Story deleted:', data);
       useGameStore.getState().handleStoryDeleted(data);
+    });
+
+    this.socket.on(ServerEvents.STORY_ACTIVATED, (data) => {
+      console.log('Story activated:', data);
+      useGameStore.getState().handleStoryActivated(data);
     });
     
     // Timer events
@@ -378,6 +385,10 @@ export class WebSocketClient {
 
   deleteStory(storyId: string) {
     this.emit(ClientEvents.STORY_DELETE, { storyId });
+  }
+
+  activateStory(storyId: string) {
+    this.emit(ClientEvents.STORY_ACTIVATE, { storyId });
   }
 
   // Timer management methods

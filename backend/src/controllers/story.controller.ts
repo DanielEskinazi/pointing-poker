@@ -4,7 +4,7 @@ import { ApiResponse } from '../types/api';
 import { logger } from '../utils/logger';
 
 export class StoryController {
-  private storyService = new StoryService();
+  private storyService = StoryService.getInstance();
 
   createStory = async (req: Request, res: Response): Promise<void> => {
     try {
