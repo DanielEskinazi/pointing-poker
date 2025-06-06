@@ -11,6 +11,7 @@ import sessionRoutes from './routes/sessions';
 import playerRoutes from './routes/players';
 import votingRoutes from './routes/voting';
 import storyRoutes from './routes/stories';
+import statisticsRoutes from './routes/statistics';
 import errorRoutes from './routes/errors';
 
 export const createApp = (): Application => {
@@ -44,6 +45,7 @@ export const createApp = (): Application => {
   app.use('/api', playerRoutes);
   app.use('/api', votingRoutes);
   app.use('/api/stories', storyRoutes);
+  app.use('/api', statisticsRoutes);
   app.use('/api', errorRoutes);
 
   // Error handling

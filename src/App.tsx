@@ -21,6 +21,7 @@ import { StoryCreatorModal } from "./components/StoryCreator";
 import { VotingProgress } from "./components/VotingProgress";
 import { VotingResults } from "./components/VotingResults";
 import { HostControls } from "./components/HostControls";
+import { SessionStatistics } from "./components/SessionStatistics";
 import { useGameStore } from "./store";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
@@ -290,6 +291,13 @@ export default function App() {
                   </div>
                 </div>
               </SessionErrorBoundary>
+            )}
+
+            {/* Session Statistics Section */}
+            {currentPlayer && isCurrentUserHost() && (
+              <div className="mb-8">
+                <SessionStatistics />
+              </div>
             )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
