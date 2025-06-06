@@ -1,6 +1,7 @@
-# Bug Fix Verification Guidelines
+# Bug Fix Guidelines
 
-## Create bugs in "/specs/bugs" folder and an accompanying github issue
+Create bugs in "/specs/bugs" folder
+After creating a bug, don't work on it immediately, ask first if you should solve it.
 
 ## Before considering any bug fix complete:
 

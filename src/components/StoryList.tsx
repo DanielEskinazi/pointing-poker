@@ -52,13 +52,22 @@ const StoryItem = ({ story, onSelect, onEdit, onDelete, isActive }: StoryItemPro
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className={`p-4 rounded-lg border transition-all cursor-pointer ${
+      className={`p-4 rounded-lg border transition-all cursor-pointer relative ${
         isActive 
           ? 'border-blue-500 bg-blue-50' 
           : 'border-gray-200 bg-white hover:border-gray-300'
       }`}
       onClick={handleSelect}
     >
+      {/* Story Points Badge */}
+      {story.finalEstimate && (
+        <div className="absolute -top-2 -right-2">
+          <div className="bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg">
+            {story.finalEstimate}
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">{status.icon}</span>
@@ -67,7 +76,7 @@ const StoryItem = ({ story, onSelect, onEdit, onDelete, isActive }: StoryItemPro
           </h4>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mr-8">
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
             {status.label}
           </span>
@@ -111,8 +120,10 @@ const StoryItem = ({ story, onSelect, onEdit, onDelete, isActive }: StoryItemPro
       )}
 
       <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>Est: {status.estimate} points</span>
-        <span>#{story.orderIndex + 1}</span>
+        <span>Story #{story.orderIndex + 1}</span>
+        {!story.finalEstimate && (
+          <span className="text-gray-400">Not estimated</span>
+        )}
       </div>
     </motion.div>
   );

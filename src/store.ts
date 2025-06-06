@@ -741,7 +741,6 @@ export const useGameStore = create<GameStore>()(
 
     try {
       const result = await votingApi.revealCards(sessionId);
-      const consensus = get().calculateConsensus(result.data.votes);
       
       set(state => ({
         ...state,
@@ -750,7 +749,7 @@ export const useGameStore = create<GameStore>()(
           ...state.voting,
           isRevealed: true,
           votingResults: result.data.votes,
-          consensus,
+          consensus: result.data.consensus || null,
         },
         players: state.players.map(p => ({ ...p, isRevealed: true })),
         lastSync: new Date()
@@ -982,6 +981,19 @@ export const useGameStore = create<GameStore>()(
   handleCardsRevealed: (data: CardsRevealedData) => {
     set(state => ({
       isRevealing: true,
+      voting: {
+        ...state.voting,
+        isRevealed: true,
+        votingResults: data.votes.map(v => ({
+          id: v.playerId,
+          playerId: v.playerId,
+          sessionId: state.sessionId || '',
+          storyId: data.storyId,
+          value: v.value as CardValue,
+          createdAt: new Date().toISOString()
+        })),
+        consensus: data.consensus || null
+      },
       players: state.players.map(p => {
         const vote = data.votes.find(v => v.playerId === p.id);
         return {
@@ -999,6 +1011,14 @@ export const useGameStore = create<GameStore>()(
       isRevealing: false,
       timer: initialState.timer,
       currentStory: initialState.currentStory,
+      voting: {
+        ...state.voting,
+        votes: {},
+        isRevealed: false,
+        hasVoted: false,
+        consensus: null,
+        votingResults: []
+      },
       players: state.players.map(p => ({
         ...p,
         selectedCard: null,
@@ -1068,6 +1088,26 @@ export const useGameStore = create<GameStore>()(
         isActive: story.id === data.story.id
       })),
       currentStory: data.story.title,
+      // Reset voting state for new story
+      voting: {
+        ...state.voting,
+        votes: {},
+        isRevealed: false,
+        hasVoted: false,
+        consensus: null,
+        votingResults: [],
+        currentStoryId: data.story.id,
+        voteCount: 0,
+        totalPlayers: undefined
+      },
+      // Reset player cards and voting status
+      players: state.players.map(p => ({
+        ...p,
+        selectedCard: null,
+        isRevealed: false,
+        votedInCurrentRound: false
+      })),
+      isRevealing: false,
       lastSync: new Date()
     }));
   },
