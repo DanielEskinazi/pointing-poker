@@ -21,8 +21,8 @@ export class StateSync {
       // 3. Resolve any conflicts
       // 4. Update store with merged state
       
-      // Since we're using BroadcastChannel for real-time sync,
-      // the state should already be in sync across tabs
+      // Since we're using WebSocket for real-time sync,
+      // the state should already be in sync across connected clients
       
     } catch (error) {
       console.error('State sync failed:', error);

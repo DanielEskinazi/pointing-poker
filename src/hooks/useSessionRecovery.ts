@@ -14,12 +14,11 @@ export const useSessionRecovery = () => {
       }
       
       try {
-        // Since this is a client-side only app using BroadcastChannel,
-        // we can't validate session existence with a server.
-        // We just need to ensure the persisted state is valid.
+        // With the backend WebSocket implementation, we can validate session existence
+        // and restore connection state.
         
         // For now, we'll assume the session is valid if we have one
-        // In a real implementation with backend, you would:
+        // TODO: Implement proper session recovery with backend:
         // 1. Validate session still exists on server
         // 2. Reconnect WebSocket if needed
         // 3. Sync latest state

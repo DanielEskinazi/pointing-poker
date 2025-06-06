@@ -39,7 +39,7 @@ Backend: http://localhost:3000
 
 ## Architecture
 
-This is a client-side Planning Poker application built with React, TypeScript, and Vite. It requires no backend and uses the browser's BroadcastChannel API for real-time synchronization across tabs/windows.
+This is a full-stack Planning Poker application built with React, TypeScript, and Vite on the frontend, with a Node.js backend using WebSocket for real-time synchronization across connected clients.
 
 ### State Management
 
@@ -48,7 +48,7 @@ The application uses Zustand for global state management with a single store pat
 - Session management (create/join via URL parameters)
 - Player management (add/remove players, card selection)
 - Game state (current story, card reveal, timer)
-- Real-time synchronization via BroadcastChannel
+- Real-time synchronization via WebSocket
 
 Key store actions:
 
@@ -72,7 +72,7 @@ Components are functional with TypeScript and follow a presentational pattern:
 - **Tailwind CSS** for styling
 - **Zustand 4.5** for state management
 - **Framer Motion 11** for animations
-- **BroadcastChannel API** for real-time sync (no WebSockets needed)
+- **WebSocket (Socket.io)** for real-time sync across clients
 
 ## Workflow Memories
 

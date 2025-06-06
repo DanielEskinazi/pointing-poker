@@ -26,7 +26,7 @@ A modern, full-stack Planning Poker application for agile software development t
 ### Hybrid Design
 The application supports two deployment modes:
 
-1. **Frontend-Only Mode**: React with Zustand + BroadcastChannel API for cross-tab sync
+1. **Frontend-Only Mode**: React with Zustand (legacy client-side only mode)
 2. **Full-Stack Mode**: React frontend + Node.js backend with PostgreSQL/Redis + WebSocket real-time communication
 
 ### Technology Stack
