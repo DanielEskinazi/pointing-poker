@@ -16,9 +16,14 @@ interface CardProps {
 
 export function Card({ value, isSelected, isRevealed, onClick, playerId, disabled }: CardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { submitVote, voting } = useGameStore();
+  const { submitVote, voting, getCurrentStory, stories } = useGameStore();
   const { showToast } = useToast();
-  const canVote = !disabled && !voting.isRevealed && !isSubmitting;
+  
+  // Enhanced voting eligibility check
+  const activeStory = getCurrentStory();
+  const hasStories = stories.length > 0;
+  const hasActiveStory = !!activeStory;
+  const canVote = !disabled && !voting.isRevealed && !isSubmitting && playerId && hasActiveStory;
   const variants = {
     hidden: { 
       scale: 1,
@@ -36,7 +41,45 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
   };
 
   const handleClick = async () => {
-    if (!canVote || !playerId) {
+    // Enhanced validation before attempting to vote
+    if (!playerId) {
+      showToast('Unable to vote', 'error', {
+        message: 'You need to join the session first'
+      });
+      onClick?.();
+      return;
+    }
+
+    if (!canVote) {
+      if (voting.isRevealed) {
+        showToast('Voting is closed', 'error', {
+          message: 'Cards have already been revealed for this round'
+        });
+      } else if (disabled) {
+        showToast('Cannot vote right now', 'error', {
+          message: 'Voting is currently disabled'
+        });
+      }
+      onClick?.();
+      return;
+    }
+
+    // Check if there's an active story to vote on
+    const { getCurrentStory, stories } = useGameStore.getState();
+    const activeStory = getCurrentStory();
+    
+    if (!activeStory && stories.length === 0) {
+      showToast('No story to vote on', 'error', {
+        message: 'Create a story first before voting'
+      });
+      onClick?.();
+      return;
+    }
+
+    if (!activeStory && stories.length > 0) {
+      showToast('No story selected', 'error', {
+        message: 'Select a story from the sidebar to start voting'
+      });
       onClick?.();
       return;
     }
@@ -48,11 +91,34 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
       onClick?.();
     } catch (error) {
       console.error('Error submitting vote:', error);
+      
+      // Enhanced error message handling
+      let errorTitle = 'Failed to submit vote';
+      let errorMessage = 'Please try again';
+      
+      if (error && typeof error === 'object' && 'message' in error) {
+        if ((error as any).message.includes('No story available')) {
+          errorTitle = 'No story to vote on';
+          errorMessage = 'Create or select a story first';
+        } else if ((error as any).message.includes('already revealed')) {
+          errorTitle = 'Voting is closed';
+          errorMessage = 'Cards have been revealed for this round';
+        } else if ((error as any).message.includes('network') || (error as any).message.includes('fetch')) {
+          errorTitle = 'Connection error';
+          errorMessage = 'Check your internet connection and try again';
+        } else if ((error as any).message.includes('Invalid vote')) {
+          errorTitle = 'Invalid vote';
+          errorMessage = 'This card value is not allowed';
+        } else {
+          errorMessage = (error as any).message;
+        }
+      }
+      
       showToast(
-        'Failed to submit vote', 
+        errorTitle, 
         'error',
         {
-          message: 'Please try again',
+          message: errorMessage,
           action: {
             label: 'Retry',
             onClick: () => handleClick()
@@ -108,10 +174,14 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
       
       {/* Disabled overlay */}
       {!canVote && !isSubmitting && (
-        <div className="absolute inset-0 bg-gray-200 bg-opacity-50 rounded-xl flex items-center justify-center">
-          {voting.isRevealed && (
-            <span className="text-xs font-medium text-gray-600">Revealed</span>
-          )}
+        <div className="absolute inset-0 bg-gray-200 bg-opacity-75 rounded-xl flex items-center justify-center">
+          <span className="text-xs font-medium text-gray-600 text-center px-2">
+            {voting.isRevealed ? 'Revealed' : 
+             !playerId ? 'Join Session' :
+             !hasActiveStory && !hasStories ? 'Create Story' :
+             !hasActiveStory ? 'Select Story' :
+             disabled ? 'Disabled' : 'Cannot Vote'}
+          </span>
         </div>
       )}
     </motion.div>

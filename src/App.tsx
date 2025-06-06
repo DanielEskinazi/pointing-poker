@@ -48,11 +48,13 @@ export default function App() {
     isCurrentUserHost,
     getVoteProgress,
     voting,
+    stories,
+    getCurrentStory,
   } = useGameStore();
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [timerKey, setTimerKey] = useState(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
-  
+
   // Generate unique tab ID to allow multiple tabs with different players
   const [tabId] = useState(() => crypto.randomUUID());
 
@@ -75,9 +77,11 @@ export default function App() {
   }, [players, playerId]);
 
   // Calculate voting states for UI
-  const { votedCount, totalCount, hasVoted } = getVoteProgress();
-  const allPlayersVoted = votedCount === totalCount && totalCount > 0;
-  const currentPlayerVoted = hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
+  const { hasVoted } = getVoteProgress();
+  const currentPlayerVoted =
+    hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
+  const hasActiveStory = !!getCurrentStory();
+  const canVoteOnStory = hasActiveStory && !isRevealing;
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -106,7 +110,7 @@ export default function App() {
       apiClient.setSessionContext(sessionId);
       authTokenManager.setSessionContext(sessionId);
     }
-    
+
     // Initialize cleanup on app start
     authActions.initCleanup();
 
@@ -180,7 +184,6 @@ export default function App() {
     }
   };
 
-
   useEffect(() => {
     // Get the current player ID from localStorage if available
     // Use tab-specific key to allow multiple tabs with different players
@@ -203,6 +206,15 @@ export default function App() {
       setPlayerId(null);
     }
   }, [sessionId, tabId]);
+
+  // Reset selected card when active story changes
+  const activeStoryId = getCurrentStory()?.id;
+  useEffect(() => {
+    // Reset selected card when story changes (but not on initial load)
+    if (selectedCard !== null) {
+      setSelectedCard(null);
+    }
+  }, [activeStoryId, selectedCard]); // Reset when story ID changes
 
   // Show recovery screen while restoring session
   if (recovering || isLoadingSession || isSessionLoading) {
@@ -264,9 +276,12 @@ export default function App() {
 
             {/* Show join form when we have a session but no current player */}
             {sessionId && !currentPlayer && (
-              <JoinGame sessionId={sessionId} tabId={tabId} onJoin={setPlayerId} />
+              <JoinGame
+                sessionId={sessionId}
+                tabId={tabId}
+                onJoin={setPlayerId}
+              />
             )}
-
 
             {/* Integrated Story & Estimation Section */}
             {currentPlayer && (
@@ -275,41 +290,57 @@ export default function App() {
                   {/* Main estimation workflow - takes up more space */}
                   <div className="lg:col-span-3">
                     <div className="space-y-4">
-                      {/* Enhanced CurrentStory with prominent CTA */}
-                      <CurrentStory 
-                        showEstimationPrompt={!isRevealing}
-                        hasVoted={!!currentPlayerVoted}
-                        isWaitingForVotes={allPlayersVoted}
-                      />
-                      
+                      {/* Current Story Information */}
+                      <CurrentStory hasStories={stories.length > 0} />
+
                       {/* Voting Cards - closer to estimation prompt */}
                       {!isRevealing && (
                         <motion.div
-                          className="bg-white rounded-lg p-6 border-2 border-blue-100 shadow-sm relative"
+                          className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm"
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.3 }}
                         >
-                          {/* Visual connection indicator - only show when user hasn't voted */}
-                          {!currentPlayerVoted && (
-                            <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                              <div className="bg-blue-500 text-white text-xs px-3 py-1 rounded-full shadow-lg">
-                                Choose below 👇
-                              </div>
-                            </div>
-                          )}
                           <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Choose Your Card</h3>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              Choose Your Card
+                            </h3>
                             {currentPlayerVoted && (
                               <div className="flex items-center gap-2 text-green-600">
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clipRule="evenodd"
+                                  />
                                 </svg>
-                                <span className="text-sm font-medium">Vote Submitted</span>
+                                <span className="text-sm font-medium">
+                                  Vote Submitted
+                                </span>
                               </div>
                             )}
                           </div>
-                          
+
+                          {/* Voting status message */}
+                          {!canVoteOnStory && (
+                            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <div className="flex items-center gap-2 text-yellow-800">
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-sm font-medium">
+                                  {!hasActiveStory && stories.length === 0 ? 'Create a story to start voting' :
+                                   !hasActiveStory ? 'Select a story from the sidebar to vote' :
+                                   'Voting is currently disabled'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Cards Grid */}
                           <motion.div
                             className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4"
@@ -330,7 +361,7 @@ export default function App() {
                                 key={value}
                                 variants={{
                                   hidden: { opacity: 0, y: 20 },
-                                  show: { opacity: 1, y: 0 }
+                                  show: { opacity: 1, y: 0 },
                                 }}
                               >
                                 <Card
@@ -345,7 +376,7 @@ export default function App() {
                           </motion.div>
                         </motion.div>
                       )}
-                      
+
                       {/* Voting Results when revealed */}
                       {isRevealing && (
                         <VotingErrorBoundary>
@@ -354,10 +385,12 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Side panel for story management and controls */}
                   <div className="space-y-6">
-                    <StoryList />
+                    <StoryList
+                      isVotingActive={hasActiveStory && !isRevealing}
+                    />
                     <HostControls
                       currentPlayerId={playerId}
                       isHost={isCurrentUserHost()}
