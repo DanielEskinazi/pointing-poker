@@ -9,7 +9,7 @@ export const VotingProgress = () => {
     sessionId 
   } = useGameStore();
   
-  const { votedCount, totalCount, hasVoted } = getVoteProgress();
+  const { votedCount, totalCount } = getVoteProgress();
   const votingPlayers = players.filter(p => !p.isSpectator);
   
   if (votingPlayers.length === 0 || !sessionId) {
@@ -92,41 +92,23 @@ export const VotingProgress = () => {
         </div>
       </div>
 
-      {/* Status Message */}
+      {/* Summary Message - Simple and focused */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
-        className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200"
+        className="mt-4 text-center"
       >
-        {votedCount === totalCount ? (
-          <div className="text-center">
-            <div className="text-blue-700 font-medium mb-1">
-              🎉 All players have voted!
-            </div>
-            <div className="text-sm text-blue-600">
-              Ready to reveal cards
-            </div>
-          </div>
-        ) : hasVoted ? (
-          <div className="text-center">
-            <div className="text-blue-700 font-medium mb-1">
-              ✅ Your vote is submitted
-            </div>
-            <div className="text-sm text-blue-600">
-              Waiting for {totalCount - votedCount} more {totalCount - votedCount === 1 ? 'player' : 'players'}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center">
-            <div className="text-blue-700 font-medium mb-1">
-              🗳️ Select your estimate
-            </div>
-            <div className="text-sm text-blue-600">
-              Choose a card to submit your vote
-            </div>
-          </div>
-        )}
+        <div className="text-sm text-gray-600">
+          {votedCount === totalCount && totalCount > 0 ? (
+            <span className="text-green-600 font-medium">✅ Voting complete</span>
+          ) : (
+            <>
+              <span className="font-medium">{totalCount - votedCount}</span> 
+              {totalCount - votedCount === 1 ? ' player' : ' players'} remaining
+            </>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );

@@ -46,6 +46,8 @@ export default function App() {
     setIsConfigured,
     syncState,
     isCurrentUserHost,
+    getVoteProgress,
+    voting,
   } = useGameStore();
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [timerKey, setTimerKey] = useState(0);
@@ -71,6 +73,11 @@ export default function App() {
   const currentPlayer = useMemo(() => {
     return playerId ? players.find((p) => p.id === playerId) || null : null;
   }, [players, playerId]);
+
+  // Calculate voting states for UI
+  const { votedCount, totalCount, hasVoted } = getVoteProgress();
+  const allPlayersVoted = votedCount === totalCount && totalCount > 0;
+  const currentPlayerVoted = hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -261,69 +268,117 @@ export default function App() {
             )}
 
 
-            {/* Story Management Section */}
-            {currentPlayer && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                <div className="lg:col-span-2">
-                  <CurrentStory />
-                </div>
-                <div>
-                  <StoryList />
-                </div>
-              </div>
-            )}
-
-            {/* Voting Section */}
+            {/* Integrated Story & Estimation Section */}
             {currentPlayer && (
               <SessionErrorBoundary sessionId={sessionId}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                  <div className="lg:col-span-2">
-                    <VotingErrorBoundary>
-                      {isRevealing ? <VotingResults /> : <VotingProgress />}
-                    </VotingErrorBoundary>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
+                  {/* Main estimation workflow - takes up more space */}
+                  <div className="lg:col-span-3">
+                    <div className="space-y-4">
+                      {/* Enhanced CurrentStory with prominent CTA */}
+                      <CurrentStory 
+                        showEstimationPrompt={!isRevealing}
+                        hasVoted={!!currentPlayerVoted}
+                        isWaitingForVotes={allPlayersVoted}
+                      />
+                      
+                      {/* Voting Cards - closer to estimation prompt */}
+                      {!isRevealing && (
+                        <motion.div
+                          className="bg-white rounded-lg p-6 border-2 border-blue-100 shadow-sm relative"
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                        >
+                          {/* Visual connection indicator - only show when user hasn't voted */}
+                          {!currentPlayerVoted && (
+                            <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                              <div className="bg-blue-500 text-white text-xs px-3 py-1 rounded-full shadow-lg">
+                                Choose below 👇
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Choose Your Card</h3>
+                            {currentPlayerVoted && (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-sm font-medium">Vote Submitted</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Cards Grid */}
+                          <motion.div
+                            className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4"
+                            variants={{
+                              hidden: { opacity: 0 },
+                              show: {
+                                opacity: 1,
+                                transition: {
+                                  staggerChildren: 0.05,
+                                },
+                              },
+                            }}
+                            initial="hidden"
+                            animate="show"
+                          >
+                            {cardValues.map((value) => (
+                              <motion.div
+                                key={value}
+                                variants={{
+                                  hidden: { opacity: 0, y: 20 },
+                                  show: { opacity: 1, y: 0 }
+                                }}
+                              >
+                                <Card
+                                  value={value}
+                                  isSelected={selectedCard === value}
+                                  isRevealed={isRevealing}
+                                  playerId={playerId}
+                                  onClick={() => handleCardSelect(value)}
+                                />
+                              </motion.div>
+                            ))}
+                          </motion.div>
+                        </motion.div>
+                      )}
+                      
+                      {/* Voting Results when revealed */}
+                      {isRevealing && (
+                        <VotingErrorBoundary>
+                          <VotingResults />
+                        </VotingErrorBoundary>
+                      )}
+                    </div>
                   </div>
-                  <div>
+                  
+                  {/* Side panel for story management and controls */}
+                  <div className="space-y-6">
+                    <StoryList />
                     <HostControls
                       currentPlayerId={playerId}
                       isHost={isCurrentUserHost()}
                     />
+                    {!isRevealing && (
+                      <VotingErrorBoundary>
+                        <VotingProgress />
+                      </VotingErrorBoundary>
+                    )}
                   </div>
                 </div>
               </SessionErrorBoundary>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
-              {players.map((player) => (
-                <PlayerAvatar key={player.id} player={player} />
-              ))}
-            </div>
-
+            {/* Player Avatars */}
             {currentPlayer && (
-              <motion.div
-                className="grid grid-cols-4 md:grid-cols-8 gap-4"
-                variants={{
-                  hidden: { opacity: 0 },
-                  show: {
-                    opacity: 1,
-                    transition: {
-                      staggerChildren: 0.1,
-                    },
-                  },
-                }}
-                initial="hidden"
-                animate="show"
-              >
-                {cardValues.map((value) => (
-                  <Card
-                    key={value}
-                    value={value}
-                    isSelected={selectedCard === value}
-                    isRevealed={isRevealing}
-                    playerId={playerId}
-                    onClick={() => handleCardSelect(value)}
-                  />
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
+                {players.map((player) => (
+                  <PlayerAvatar key={player.id} player={player} />
                 ))}
-              </motion.div>
+              </div>
             )}
           </div>
 
