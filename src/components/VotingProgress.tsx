@@ -1,22 +1,25 @@
-import { motion } from 'framer-motion';
-import { useGameStore } from '../store';
+import { motion } from "framer-motion";
+import { useGameStore } from "../store";
 
 export const VotingProgress = () => {
-  const { 
-    players, 
-    voting, 
-    getVoteProgress, 
-    sessionId 
+  const {
+    players,
+    voting,
+    getVoteProgress,
+    sessionId,
+    getCurrentStory,
+    isRevealing,
   } = useGameStore();
-  
-  const { votedCount, totalCount, hasVoted } = getVoteProgress();
-  const votingPlayers = players.filter(p => !p.isSpectator);
-  
-  if (votingPlayers.length === 0 || !sessionId) {
+
+  const { votedCount, totalCount } = getVoteProgress();
+  const hasActiveStory = !!getCurrentStory();
+
+  if (players.length === 0 || !sessionId) {
     return null;
   }
 
-  const progressPercentage = totalCount > 0 ? (votedCount / totalCount) * 100 : 0;
+  const progressPercentage =
+    totalCount > 0 ? (votedCount / totalCount) * 100 : 0;
 
   return (
     <motion.div
@@ -25,65 +28,122 @@ export const VotingProgress = () => {
       className="bg-white rounded-lg border border-gray-200 shadow-sm p-6"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Voting Progress</h3>
-        <span className="text-sm text-gray-500">
-          {votedCount} of {totalCount} voted
+        <h3 className="section-title text-gray-900">Players</h3>
+        <span className="body-text text-gray-500">
+          {hasActiveStory && !isRevealing
+            ? `${votedCount} of ${totalCount} voted`
+            : `${players.filter((p) => p.isOnline !== false).length} online`}
         </span>
       </div>
 
-      {/* Progress Bar */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-          <span>Progress</span>
-          <span>{Math.round(progressPercentage)}%</span>
+      {/* Progress Bar - only show during active voting */}
+      {hasActiveStory && !isRevealing && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between body-text text-gray-600 mb-2">
+            <span>Voting Progress</span>
+            <span>{Math.round(progressPercentage)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <motion.div
+              className="h-2 rounded-full transition-all duration-500 ease-out"
+              style={{ backgroundColor: "var(--primary-blue)" }}
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPercentage}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+            />
+          </div>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <motion.div
-            className="bg-blue-600 h-2 rounded-full"
-            initial={{ width: 0 }}
-            animate={{ width: `${progressPercentage}%` }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Player Status */}
       <div className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-700">Players</h4>
         <div className="grid gap-2">
-          {votingPlayers.map((player) => {
-            const hasPlayerVoted = !!voting.votes[player.id] || !!player.selectedCard;
-            
+          {players.map((player) => {
+            const hasPlayerVoted =
+              !!voting.votes[player.id] || !!player.selectedCard;
+            const isOnline = player.isOnline !== false;
+            const isVotingPlayer = !player.isSpectator;
+            const showVotingStatus =
+              hasActiveStory && !isRevealing && isVotingPlayer;
+
             return (
               <motion.div
                 key={player.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 className={`flex items-center justify-between p-3 rounded-lg border ${
-                  hasPlayerVoted 
-                    ? 'border-green-200 bg-green-50' 
-                    : 'border-gray-200 bg-gray-50'
+                  showVotingStatus && hasPlayerVoted
+                    ? "border-green-200 bg-green-50"
+                    : "border-gray-200 bg-gray-50"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    hasPlayerVoted 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-gray-300 text-gray-600'
-                  }`}>
-                    {hasPlayerVoted ? '✓' : player.avatar || player.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="font-medium text-gray-900">{player.name}</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {hasPlayerVoted ? (
-                    <span className="text-sm text-green-600 font-medium">Voted</span>
-                  ) : (
-                    <div className="flex items-center gap-1 text-sm text-gray-500">
-                      <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
-                      Waiting
+                  <div className="relative">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium`}
+                      style={{
+                        backgroundColor:
+                          showVotingStatus && hasPlayerVoted
+                            ? "var(--success-green)"
+                            : "#D1D5DB",
+                        color:
+                          showVotingStatus && hasPlayerVoted
+                            ? "white"
+                            : "#4B5563",
+                      }}
+                    >
+                      {showVotingStatus && hasPlayerVoted
+                        ? "✓"
+                        : player.avatar || player.name.charAt(0).toUpperCase()}
                     </div>
+                    {/* Online indicator */}
+                    {isOnline && (
+                      <div
+                        className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
+                        style={{ backgroundColor: "var(--success-green)" }}
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-medium text-gray-900">
+                      {player.name}
+                    </span>
+                    {player.isHost && (
+                      <span className="text-xs text-blue-600 font-medium">
+                        Host
+                      </span>
+                    )}
+                    {player.isSpectator && (
+                      <span className="text-xs text-gray-500">Spectator</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {showVotingStatus ? (
+                    hasPlayerVoted ? (
+                      <span
+                        className="body-text font-medium"
+                        style={{ color: "var(--success-green)" }}
+                      >
+                        Voted
+                      </span>
+                    ) : (
+                      <div
+                        className="flex items-center gap-1 body-text"
+                        style={{ color: "var(--waiting-gray)" }}
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full animate-pulse"
+                          style={{ backgroundColor: "var(--warning-amber)" }}
+                        />
+                        Waiting
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      {isOnline ? "Online" : "Offline"}
+                    </span>
                   )}
                 </div>
               </motion.div>
@@ -92,42 +152,32 @@ export const VotingProgress = () => {
         </div>
       </div>
 
-      {/* Status Message */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200"
-      >
-        {votedCount === totalCount ? (
-          <div className="text-center">
-            <div className="text-blue-700 font-medium mb-1">
-              🎉 All players have voted!
-            </div>
-            <div className="text-sm text-blue-600">
-              Ready to reveal cards
-            </div>
+      {/* Summary Message - only show during voting */}
+      {hasActiveStory && !isRevealing && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="mt-4 text-center"
+        >
+          <div className="body-text text-gray-600">
+            {votedCount === totalCount && totalCount > 0 ? (
+              <span
+                className="font-medium"
+                style={{ color: "var(--success-green)" }}
+              >
+                ✅ Voting complete
+              </span>
+            ) : (
+              <>
+                <span className="font-medium">{totalCount - votedCount}</span>
+                {totalCount - votedCount === 1 ? " player" : " players"}{" "}
+                remaining
+              </>
+            )}
           </div>
-        ) : hasVoted ? (
-          <div className="text-center">
-            <div className="text-blue-700 font-medium mb-1">
-              ✅ Your vote is submitted
-            </div>
-            <div className="text-sm text-blue-600">
-              Waiting for {totalCount - votedCount} more {totalCount - votedCount === 1 ? 'player' : 'players'}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center">
-            <div className="text-blue-700 font-medium mb-1">
-              🗳️ Select your estimate
-            </div>
-            <div className="text-sm text-blue-600">
-              Choose a card to submit your vote
-            </div>
-          </div>
-        )}
-      </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };

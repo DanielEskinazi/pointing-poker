@@ -113,6 +113,19 @@ export interface Story {
   isActive: boolean;
   createdAt: string;
   completedAt?: string;
+  votingHistory?: VotingHistoryData;
+}
+
+export interface VotingHistoryData {
+  votes: Vote[];
+  consensus: ConsensusData | null;
+  statistics?: {
+    average: number;
+    median: number;
+    min: number;
+    max: number;
+  };
+  revealedAt: string;
 }
 
 export interface StoryData {

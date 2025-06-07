@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, RefreshCw, LogOut } from 'lucide-react';
+import { HiExclamationTriangle, HiArrowPath, HiArrowRightOnRectangle } from 'react-icons/hi2';
 import { LoadingButton } from '../loading';
 import { authActions } from '../../store/actions/auth';
 
@@ -66,7 +66,7 @@ export class SessionErrorBoundary extends Component<Props, State> {
           >
             <div className="flex justify-center mb-4">
               <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-yellow-600" />
+                <HiExclamationTriangle className="w-6 h-6 text-yellow-600" />
               </div>
             </div>
 
@@ -94,7 +94,7 @@ export class SessionErrorBoundary extends Component<Props, State> {
                 size="sm"
                 className="flex items-center gap-2"
               >
-                <RefreshCw className="w-4 h-4" />
+                <HiArrowPath className="w-4 h-4" />
                 Try Again
               </LoadingButton>
               
@@ -104,7 +104,7 @@ export class SessionErrorBoundary extends Component<Props, State> {
                 size="sm"
                 className="flex items-center gap-2"
               >
-                <LogOut className="w-4 h-4" />
+                <HiArrowRightOnRectangle className="w-4 h-4" />
                 Leave Session
               </LoadingButton>
             </div>

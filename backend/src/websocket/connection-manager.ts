@@ -118,14 +118,20 @@ export class ConnectionManager {
       throw new Error('Player not found in session');
     }
 
-    // Update player as active and last seen
-    const updatedPlayer = await db.getPrisma().player.update({
-      where: { id: playerId },
-      data: { 
-        isActive: true,
-        lastSeenAt: new Date()
-      }
-    });
+    // Update player as active and last seen, and get session host
+    const [updatedPlayer, session] = await Promise.all([
+      db.getPrisma().player.update({
+        where: { id: playerId },
+        data: { 
+          isActive: true,
+          lastSeenAt: new Date()
+        }
+      }),
+      db.getPrisma().session.findUnique({
+        where: { id: sessionId },
+        select: { hostId: true }
+      })
+    ]);
 
     // Update socket data
     socket.data.playerId = playerId;
@@ -138,7 +144,7 @@ export class ConnectionManager {
 
     // Notify player of reconnection with current state
     socket.emit(ServerEvents.PLAYER_RECONNECTED, {
-      player: this.mapPlayerToInfo(updatedPlayer),
+      player: this.mapPlayerToInfo(updatedPlayer, session?.hostId),
       sessionState: {
         players: sessionState.players,
         currentStory: sessionState.currentStory,
@@ -147,7 +153,7 @@ export class ConnectionManager {
       }
     });
 
-    return this.mapPlayerToInfo(updatedPlayer);
+    return this.mapPlayerToInfo(updatedPlayer, session?.hostId);
   }
 
   private async handleNewPlayerJoin(
@@ -170,18 +176,24 @@ export class ConnectionManager {
       throw new Error('Player name already exists in session');
     }
 
-    // Create new player
-    const newPlayer = await db.getPrisma().player.create({
-      data: {
-        sessionId,
-        name: playerName,
-        avatar: avatar || 'avatar-1',
-        isSpectator: false,
-        isActive: true,
-        joinedAt: new Date(),
-        lastSeenAt: new Date()
-      }
-    });
+    // Create new player and get session host
+    const [newPlayer, session] = await Promise.all([
+      db.getPrisma().player.create({
+        data: {
+          sessionId,
+          name: playerName,
+          avatar: avatar || 'avatar-1',
+          isSpectator: false,
+          isActive: true,
+          joinedAt: new Date(),
+          lastSeenAt: new Date()
+        }
+      }),
+      db.getPrisma().session.findUnique({
+        where: { id: sessionId },
+        select: { hostId: true }
+      })
+    ]);
 
     // Update socket data
     socket.data.playerId = newPlayer.id;
@@ -190,7 +202,7 @@ export class ConnectionManager {
     await this.redisState.setPlayerOnline(newPlayer.id, socket.id);
 
     // Notify other players
-    const playerInfo = this.mapPlayerToInfo(newPlayer);
+    const playerInfo = this.mapPlayerToInfo(newPlayer, session?.hostId);
     const playerCount = await this.getActivePlayerCount(sessionId);
     
     socket.to(`session:${sessionId}`).emit(ServerEvents.PLAYER_JOINED, {
@@ -543,16 +555,22 @@ export class ConnectionManager {
     try {
       if (!connection.playerId) return;
 
-      const updatedPlayer = await db.getPrisma().player.update({
-        where: { id: connection.playerId },
-        data: {
-          name: data.name,
-          avatar: data.avatar,
-          isSpectator: data.isSpectator
-        }
-      });
+      const [updatedPlayer, session] = await Promise.all([
+        db.getPrisma().player.update({
+          where: { id: connection.playerId },
+          data: {
+            name: data.name,
+            avatar: data.avatar,
+            isSpectator: data.isSpectator
+          }
+        }),
+        db.getPrisma().session.findUnique({
+          where: { id: connection.sessionId },
+          select: { hostId: true }
+        })
+      ]);
 
-      const playerInfo = this.mapPlayerToInfo(updatedPlayer);
+      const playerInfo = this.mapPlayerToInfo(updatedPlayer, session?.hostId);
       
       io.to(`session:${connection.sessionId}`).emit(ServerEvents.PLAYER_UPDATED, {
         player: playerInfo
@@ -788,8 +806,8 @@ export class ConnectionManager {
 
       // Notify all players in session
       io.to(`session:${sessionId}`).emit(ServerEvents.PLAYER_PROMOTED, {
-        newHost: this.mapPlayerToInfo(newHost),
-        previousHost: previousHost ? this.mapPlayerToInfo(previousHost) : undefined
+        newHost: this.mapPlayerToInfo(newHost, newHost.id), // newHost is now the host
+        previousHost: previousHost ? this.mapPlayerToInfo(previousHost) : undefined // previousHost is no longer host
       });
 
       logger.info('Player promoted to host', {
@@ -852,13 +870,14 @@ export class ConnectionManager {
     isActive: boolean | null; 
     joinedAt: Date | null; 
     lastSeenAt: Date | null; 
-  }): PlayerInfo {
+  }, hostId?: string | null): PlayerInfo {
     return {
       id: player.id,
       name: player.name,
       avatar: player.avatar,
       isSpectator: player.isSpectator ?? false,
       isActive: player.isActive ?? true,
+      isHost: hostId ? player.id === hostId : false,
       joinedAt: player.joinedAt ?? new Date(),
       lastSeenAt: player.lastSeenAt ?? new Date()
     };
@@ -883,13 +902,17 @@ export class ConnectionManager {
   }
 
   private async getSessionState(sessionId: string) {
-    const [players, stories] = await Promise.all([
+    const [players, stories, session] = await Promise.all([
       db.getPrisma().player.findMany({
         where: { sessionId, isActive: true }
       }),
       db.getPrisma().story.findMany({
         where: { sessionId },
         orderBy: { orderIndex: 'asc' }
+      }),
+      db.getPrisma().session.findUnique({
+        where: { id: sessionId },
+        select: { hostId: true }
       })
     ]);
 
@@ -897,7 +920,7 @@ export class ConnectionManager {
     const cachedState = await this.redisState.getSessionState(sessionId);
 
     return {
-      players: players.map(p => this.mapPlayerToInfo(p)),
+      players: players.map(p => this.mapPlayerToInfo(p, session?.hostId)),
       stories: stories.map(s => this.mapStoryToInfo(s)),
       currentStory: currentStory ? this.mapStoryToInfo(currentStory) : undefined,
       timer: cachedState?.timer,

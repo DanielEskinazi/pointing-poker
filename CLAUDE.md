@@ -6,7 +6,10 @@ Try to obtain as much context as possible to solve any task, if you feel you don
 
 # Workflow: Work/Fix → Show → Test → Verify → Get Approval → Commit → Close Github Issue (if exists)
 
-**NEVER commit without explicit user approval. ALWAYS test and verify fixes work first.**
+# Commiting rules
+
+1. NEVER commit without explicit user approval
+2. ALWAYS test and verify before suggesting a commit.
 
 ## GitHub Issue Management
 

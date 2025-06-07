@@ -21,7 +21,7 @@ export const StorySelector = ({ compact = false }: StorySelectorProps) => {
     try {
       await setActiveStory(story.id);
       setIsOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error setting active story:', error);
       const errorMessage = getStoryErrorMessage(error, 'activate');
       showToast(errorMessage.title, 'error', {
@@ -138,7 +138,7 @@ export const StorySelector = ({ compact = false }: StorySelectorProps) => {
                       ? 'bg-blue-100 text-blue-800'
                       : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {isActive ? 'Active' : 'Available'}
+                    {isActive ? 'Voting Now' : 'Ready to Vote'}
                   </span>
                 </div>
               </div>
@@ -154,7 +154,7 @@ export const StorySelector = ({ compact = false }: StorySelectorProps) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-500">No stories available for voting</p>
+          <p className="text-sm text-gray-500">All stories have been estimated</p>
         </div>
       )}
     </div>

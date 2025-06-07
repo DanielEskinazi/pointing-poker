@@ -2,12 +2,7 @@ import { useGameStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingButton } from './loading';
 import { useToast } from './toast';
-import { 
-  Wifi, 
-  WifiOff,
-  AlertTriangle,
-  RotateCw
-} from 'lucide-react';
+import { HiWifi, HiSignalSlash, HiExclamationTriangle, HiArrowPath } from 'react-icons/hi2';
 
 export const ConnectionStatus = () => {
   const { connectionStatus, connectionError } = useGameStore();
@@ -26,7 +21,7 @@ export const ConnectionStatus = () => {
         };
       case 'connected':
         return {
-          icon: Wifi,
+          icon: HiWifi,
           text: 'Connected',
           color: 'text-green-600',
           bgColor: 'bg-green-100',
@@ -35,7 +30,7 @@ export const ConnectionStatus = () => {
       case 'connecting':
       case 'reconnecting':
         return {
-          icon: RotateCw,
+          icon: HiArrowPath,
           text: connectionStatus === 'connecting' ? 'Connecting...' : 'Reconnecting...',
           color: 'text-yellow-600',
           bgColor: 'bg-yellow-100',
@@ -44,7 +39,7 @@ export const ConnectionStatus = () => {
         };
       case 'disconnected':
         return {
-          icon: WifiOff,
+          icon: HiSignalSlash,
           text: 'Offline',
           subtitle: 'Changes will sync when reconnected',
           color: 'text-gray-600',
@@ -101,7 +96,7 @@ export const ConnectionStatus = () => {
                     variant="secondary"
                     className="mt-2 text-xs"
                   >
-                    <RotateCw className="w-3 h-3" />
+                    <HiArrowPath className="w-3 h-3" />
                     Retry
                   </LoadingButton>
                 )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { HiExclamationTriangle } from 'react-icons/hi2';
 import { ApiError as ApiErrorType } from '../types';
 
 interface ApiErrorProps {
@@ -24,7 +24,7 @@ export const ApiError: React.FC<ApiErrorProps> = ({ error, onRetry }) => {
   return (
     <div className="bg-red-50 border border-red-200 rounded-lg p-4">
       <div className="flex items-start">
-        <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5" />
+        <HiExclamationTriangle className="h-5 w-5 text-red-400 mt-0.5" />
         <div className="ml-3 flex-1">
           <h3 className="text-sm font-medium text-red-800">
             Error

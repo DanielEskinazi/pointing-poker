@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle, 
-  Info, 
-  X 
-} from 'lucide-react';
+import { HiCheckCircle, HiXCircle, HiExclamationTriangle, HiInformationCircle, HiXMark } from 'react-icons/hi2';
 import { Toast } from '../../types/errors';
 
 interface ToastNotificationProps {
@@ -16,28 +10,28 @@ interface ToastNotificationProps {
 
 const typeConfig = {
   success: {
-    icon: CheckCircle,
+    icon: HiCheckCircle,
     bgColor: 'bg-green-50',
     borderColor: 'border-green-200',
     iconColor: 'text-green-600',
     textColor: 'text-green-800'
   },
   error: {
-    icon: XCircle,
+    icon: HiXCircle,
     bgColor: 'bg-red-50',
     borderColor: 'border-red-200',
     iconColor: 'text-red-600',
     textColor: 'text-red-800'
   },
   warning: {
-    icon: AlertTriangle,
+    icon: HiExclamationTriangle,
     bgColor: 'bg-yellow-50',
     borderColor: 'border-yellow-200',
     iconColor: 'text-yellow-600',
     textColor: 'text-yellow-800'
   },
   info: {
-    icon: Info,
+    icon: HiInformationCircle,
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
     iconColor: 'text-blue-600',
@@ -131,7 +125,7 @@ export function ToastNotification({ toast, onHide }: ToastNotificationProps) {
           `}
           aria-label="Close notification"
         >
-          <X className="w-4 h-4" />
+          <HiXMark className="w-4 h-4" />
         </button>
       </div>
     </motion.div>

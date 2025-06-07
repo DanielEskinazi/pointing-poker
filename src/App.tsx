@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Share2 } from "lucide-react";
+import { HiShare } from "react-icons/hi2";
 import { Card } from "./components/Card";
 import { PlayerAvatar } from "./components/PlayerAvatar";
 import { Timer } from "./components/Timer";
@@ -20,6 +20,7 @@ import { StoryList } from "./components/StoryList";
 import { StoryCreatorModal } from "./components/StoryCreator";
 import { VotingProgress } from "./components/VotingProgress";
 import { VotingResults } from "./components/VotingResults";
+import { StoryVotingResults } from "./components/StoryVotingResults";
 import { HostControls } from "./components/HostControls";
 import { useGameStore } from "./store";
 import { useWebSocket } from "./hooks/useWebSocket";
@@ -46,11 +47,15 @@ export default function App() {
     setIsConfigured,
     syncState,
     isCurrentUserHost,
+    getVoteProgress,
+    voting,
+    stories,
+    getCurrentStory,
   } = useGameStore();
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [timerKey, setTimerKey] = useState(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
-  
+
   // Generate unique tab ID to allow multiple tabs with different players
   const [tabId] = useState(() => crypto.randomUUID());
 
@@ -71,6 +76,12 @@ export default function App() {
   const currentPlayer = useMemo(() => {
     return playerId ? players.find((p) => p.id === playerId) || null : null;
   }, [players, playerId]);
+
+  // Calculate voting states for UI
+  const { hasVoted } = getVoteProgress();
+  const currentPlayerVoted =
+    hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
+  const hasActiveStory = !!getCurrentStory();
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -99,7 +110,7 @@ export default function App() {
       apiClient.setSessionContext(sessionId);
       authTokenManager.setSessionContext(sessionId);
     }
-    
+
     // Initialize cleanup on app start
     authActions.initCleanup();
 
@@ -173,7 +184,6 @@ export default function App() {
     }
   };
 
-
   useEffect(() => {
     // Get the current player ID from localStorage if available
     // Use tab-specific key to allow multiple tabs with different players
@@ -196,6 +206,15 @@ export default function App() {
       setPlayerId(null);
     }
   }, [sessionId, tabId]);
+
+  // Reset selected card when active story changes
+  const activeStoryId = getCurrentStory()?.id;
+  useEffect(() => {
+    // Reset selected card when story changes (but not on initial load)
+    if (selectedCard !== null) {
+      setSelectedCard(null);
+    }
+  }, [activeStoryId, selectedCard]); // Reset when story ID changes
 
   // Show recovery screen while restoring session
   if (recovering || isLoadingSession || isSessionLoading) {
@@ -225,7 +244,7 @@ export default function App() {
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-4">
-                <h1 className="text-4xl font-bold text-gray-800">
+                <h1 className="page-title text-gray-800">
                   Planning Poker
                 </h1>
                 {sessionId && (
@@ -234,7 +253,7 @@ export default function App() {
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                     >
-                      <Share2 size={20} />
+                      <HiShare size={20} />
                       Share Session
                     </button>
                     <button
@@ -257,73 +276,128 @@ export default function App() {
 
             {/* Show join form when we have a session but no current player */}
             {sessionId && !currentPlayer && (
-              <JoinGame sessionId={sessionId} tabId={tabId} onJoin={setPlayerId} />
+              <JoinGame
+                sessionId={sessionId}
+                tabId={tabId}
+                onJoin={setPlayerId}
+              />
             )}
 
-
-            {/* Story Management Section */}
-            {currentPlayer && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                <div className="lg:col-span-2">
-                  <CurrentStory />
-                </div>
-                <div>
-                  <StoryList />
-                </div>
-              </div>
-            )}
-
-            {/* Voting Section */}
+            {/* Integrated Story & Estimation Section */}
             {currentPlayer && (
               <SessionErrorBoundary sessionId={sessionId}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                  <div className="lg:col-span-2">
-                    <VotingErrorBoundary>
-                      {isRevealing ? <VotingResults /> : <VotingProgress />}
-                    </VotingErrorBoundary>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
+                  {/* Main estimation workflow - takes up more space */}
+                  <div className="lg:col-span-3">
+                    <div className="space-y-4">
+                      {/* Current Story Information */}
+                      <CurrentStory hasStories={stories.length > 0} />
+
+                      {/* Voting Cards - only show when there are stories */}
+                      {hasActiveStory && !isRevealing && (
+                        <motion.div
+                          className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm"
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                        >
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="section-title text-gray-900">
+                              Select Your Estimate
+                            </h3>
+                            {currentPlayerVoted && (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                                <span className="text-sm font-medium">
+                                  Vote Submitted
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Cards Grid */}
+                          <motion.div
+                            className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4"
+                            variants={{
+                              hidden: { opacity: 0 },
+                              show: {
+                                opacity: 1,
+                                transition: {
+                                  staggerChildren: 0.05,
+                                },
+                              },
+                            }}
+                            initial="hidden"
+                            animate="show"
+                          >
+                            {cardValues.map((value) => (
+                              <motion.div
+                                key={value}
+                                variants={{
+                                  hidden: { opacity: 0, y: 20 },
+                                  show: { opacity: 1, y: 0 },
+                                }}
+                              >
+                                <Card
+                                  value={value}
+                                  isSelected={selectedCard === value}
+                                  isRevealed={isRevealing}
+                                  playerId={playerId}
+                                  onClick={() => handleCardSelect(value)}
+                                />
+                              </motion.div>
+                            ))}
+                          </motion.div>
+                        </motion.div>
+                      )}
+
+                      {/* Voting Results - show for current reveals or historical results */}
+                      {(() => {
+                        const currentStory = getCurrentStory();
+                        const showCurrentResults = isRevealing && currentStory;
+                        const showHistoricalResults = currentStory && !isRevealing && 
+                          (currentStory.votingHistory || currentStory.completedAt);
+                        
+                        if (showCurrentResults || showHistoricalResults) {
+                          return (
+                            <VotingErrorBoundary>
+                              <StoryVotingResults 
+                                story={currentStory} 
+                                isCurrentlyRevealing={isRevealing}
+                              />
+                            </VotingErrorBoundary>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                   </div>
-                  <div>
+
+                  {/* Side panel for story management and controls */}
+                  <div className="space-y-6">
+                    <StoryList
+                      isVotingActive={hasActiveStory && !isRevealing}
+                    />
                     <HostControls
                       currentPlayerId={playerId}
                       isHost={isCurrentUserHost()}
                     />
+                    <VotingErrorBoundary>
+                      <VotingProgress />
+                    </VotingErrorBoundary>
                   </div>
                 </div>
               </SessionErrorBoundary>
-            )}
-
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
-              {players.map((player) => (
-                <PlayerAvatar key={player.id} player={player} />
-              ))}
-            </div>
-
-            {currentPlayer && (
-              <motion.div
-                className="grid grid-cols-4 md:grid-cols-8 gap-4"
-                variants={{
-                  hidden: { opacity: 0 },
-                  show: {
-                    opacity: 1,
-                    transition: {
-                      staggerChildren: 0.1,
-                    },
-                  },
-                }}
-                initial="hidden"
-                animate="show"
-              >
-                {cardValues.map((value) => (
-                  <Card
-                    key={value}
-                    value={value}
-                    isSelected={selectedCard === value}
-                    isRevealed={isRevealing}
-                    playerId={playerId}
-                    onClick={() => handleCardSelect(value)}
-                  />
-                ))}
-              </motion.div>
             )}
           </div>
 

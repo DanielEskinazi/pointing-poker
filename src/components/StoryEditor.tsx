@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2 } from 'lucide-react';
+import { HiPencilSquare } from 'react-icons/hi2';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
 
@@ -22,7 +22,7 @@ export function StoryEditor() {
           onClick={() => setIsEditing(!isEditing)}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
-          <Edit2 size={20} className="text-gray-600" />
+          <HiPencilSquare size={20} className="text-gray-600" />
         </button>
       </div>
       

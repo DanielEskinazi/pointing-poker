@@ -63,6 +63,7 @@ export interface PlayerInfo {
   avatar: string;
   isSpectator: boolean;
   isActive: boolean;
+  isHost: boolean;
   joinedAt: Date;
   lastSeenAt: Date;
 }

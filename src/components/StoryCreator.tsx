@@ -45,7 +45,7 @@ export const StoryCreator = ({ onClose }: StoryCreatorProps) => {
       validation.clearAllErrors();
       setIsCreatingStory(false);
       onClose?.();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating story:', error);
       
       const errorMessage = getStoryErrorMessage(error, 'create');

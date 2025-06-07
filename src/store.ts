@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote, TimerState, TimerConfiguration } from './types';
+import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote, TimerState, TimerConfiguration, VotingHistoryData } from './types';
 import type { 
   ConnectionStatus, 
   PlayerJoinedData, 
@@ -63,6 +63,8 @@ interface GameStore extends GameState {
   getCurrentStory: () => Story | null;
   isCreatingStory: boolean;
   setIsCreatingStory: (value: boolean) => void;
+  preserveVotingHistory: (storyId: string) => void;
+  getStoryVotingHistory: (storyId: string) => VotingHistoryData | null;
   
   // Voting management
   submitVote: (playerId: string, value: CardValue) => Promise<void>;
@@ -609,13 +611,19 @@ export const useGameStore = create<GameStore>()(
   },
 
   setActiveStory: async (storyId) => {
-    const { sessionId } = get();
+    const { sessionId, getCurrentStory, preserveVotingHistory } = get();
     
     if (!sessionId) {
       throw new Error('No session ID available');
     }
 
     try {
+      // Preserve voting history for current story before switching
+      const currentStory = getCurrentStory();
+      if (currentStory && currentStory.id !== storyId) {
+        preserveVotingHistory(currentStory.id);
+      }
+      
       // Set active story via API first
       const activeStory = await storiesApi.setActiveStory(sessionId, storyId);
 
@@ -652,6 +660,57 @@ export const useGameStore = create<GameStore>()(
 
   setIsCreatingStory: (value) => {
     set({ isCreatingStory: value });
+  },
+  
+  preserveVotingHistory: (storyId) => {
+    set(state => {
+      const { voting } = state;
+      
+      // Only preserve if we have revealed voting results
+      if (!voting.isRevealed || voting.votingResults.length === 0) {
+        return state;
+      }
+      
+      // Calculate statistics for numeric votes
+      const numericVotes = voting.votingResults
+        .map(v => v.value)
+        .filter(v => typeof v === 'number') as number[];
+      
+      let statistics = null;
+      if (numericVotes.length > 0) {
+        const sum = numericVotes.reduce((a, b) => a + b, 0);
+        const average = sum / numericVotes.length;
+        const sorted = [...numericVotes].sort((a, b) => a - b);
+        const median = sorted.length % 2 === 0
+          ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+          : sorted[Math.floor(sorted.length / 2)];
+        const min = Math.min(...numericVotes);
+        const max = Math.max(...numericVotes);
+        
+        statistics = { average, median, min, max };
+      }
+      
+      const votingHistory: VotingHistoryData = {
+        votes: voting.votingResults,
+        consensus: voting.consensus,
+        statistics,
+        revealedAt: new Date().toISOString()
+      };
+      
+      return {
+        ...state,
+        stories: state.stories.map(story => 
+          story.id === storyId 
+            ? { ...story, votingHistory }
+            : story
+        )
+      };
+    });
+  },
+  
+  getStoryVotingHistory: (storyId) => {
+    const story = get().stories.find(s => s.id === storyId);
+    return story?.votingHistory || null;
   },
 
   // Voting management
@@ -733,7 +792,7 @@ export const useGameStore = create<GameStore>()(
   },
 
   revealVotes: async () => {
-    const { sessionId } = get();
+    const { sessionId, getCurrentStory } = get();
     
     if (!sessionId) {
       throw new Error('No session ID available');
@@ -741,6 +800,7 @@ export const useGameStore = create<GameStore>()(
 
     try {
       const result = await votingApi.revealCards(sessionId);
+      const currentStory = getCurrentStory();
       
       set(state => ({
         ...state,
@@ -754,6 +814,14 @@ export const useGameStore = create<GameStore>()(
         players: state.players.map(p => ({ ...p, isRevealed: true })),
         lastSync: new Date()
       }));
+      
+      // Also preserve the voting history immediately for the current story
+      if (currentStory) {
+        // Use setTimeout to allow state to update first
+        setTimeout(() => {
+          get().preserveVotingHistory(currentStory.id);
+        }, 100);
+      }
     } catch (error) {
       console.error('Error revealing votes:', error);
       throw error;
@@ -1082,21 +1150,28 @@ export const useGameStore = create<GameStore>()(
   },
 
   handleStoryActivated: (data: { story: StoryInfo; previousActiveStoryId?: string }) => {
-    set(state => ({
-      stories: state.stories.map(story => ({
-        ...story,
-        isActive: story.id === data.story.id
-      })),
-      currentStory: data.story.title,
-      // Reset voting state for new story
-      voting: {
-        ...state.voting,
-        votes: {},
-        isRevealed: false,
-        hasVoted: false,
-        consensus: null,
-        votingResults: [],
-        currentStoryId: data.story.id,
+    set(state => {
+      // Preserve voting history for the previous active story
+      if (data.previousActiveStoryId && state.voting.isRevealed && state.voting.votingResults.length > 0) {
+        const { preserveVotingHistory } = get();
+        preserveVotingHistory(data.previousActiveStoryId);
+      }
+      
+      return {
+        stories: state.stories.map(story => ({
+          ...story,
+          isActive: story.id === data.story.id
+        })),
+        currentStory: data.story.title,
+        // Reset voting state for new story
+        voting: {
+          ...state.voting,
+          votes: {},
+          isRevealed: false,
+          hasVoted: false,
+          consensus: null,
+          votingResults: [],
+          currentStoryId: data.story.id,
         voteCount: 0,
         totalPlayers: undefined
       },
@@ -1109,7 +1184,8 @@ export const useGameStore = create<GameStore>()(
       })),
       isRevealing: false,
       lastSync: new Date()
-    }));
+      };
+    });
   },
 
   handleTimerUpdated: (data: TimerUpdatedData) => {
@@ -1136,6 +1212,7 @@ export const useGameStore = create<GameStore>()(
       console.log(`[Store][${timestamp}] Processing players:`, data.players.length, data.players);
       console.log(`[Store][${timestamp}] Session config received:`, data.config);
       
+
       const updates: Record<string, unknown> = {
         players: data.players.map((p: PlayerWithExtras) => ({
           id: p.id,
