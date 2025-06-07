@@ -332,6 +332,7 @@ export class SessionService {
           avatar: player.avatar,
           isSpectator: player.isSpectator ?? false,
           isActive: player.isActive ?? true,
+          isHost: session.hostId === player.id,
           joinedAt: player.joinedAt ?? new Date(),
           lastSeenAt: player.lastSeenAt ?? new Date()
         };

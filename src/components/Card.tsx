@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
 import { LoadingSpinner } from './loading';
@@ -21,7 +21,6 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
   
   // Enhanced voting eligibility check
   const activeStory = getCurrentStory();
-  const hasStories = stories.length > 0;
   const hasActiveStory = !!activeStory;
   const canVote = !disabled && !voting.isRevealed && !isSubmitting && playerId && hasActiveStory;
   const variants = {
@@ -97,20 +96,21 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
       let errorMessage = 'Please try again';
       
       if (error && typeof error === 'object' && 'message' in error) {
-        if ((error as any).message.includes('No story available')) {
+        const errorObj = error as { message: string };
+        if (errorObj.message.includes('No story available')) {
           errorTitle = 'No story to vote on';
           errorMessage = 'Create or select a story first';
-        } else if ((error as any).message.includes('already revealed')) {
+        } else if (errorObj.message.includes('already revealed')) {
           errorTitle = 'Voting is closed';
           errorMessage = 'Cards have been revealed for this round';
-        } else if ((error as any).message.includes('network') || (error as any).message.includes('fetch')) {
+        } else if (errorObj.message.includes('network') || errorObj.message.includes('fetch')) {
           errorTitle = 'Connection error';
           errorMessage = 'Check your internet connection and try again';
-        } else if ((error as any).message.includes('Invalid vote')) {
+        } else if (errorObj.message.includes('Invalid vote')) {
           errorTitle = 'Invalid vote';
           errorMessage = 'This card value is not allowed';
         } else {
-          errorMessage = (error as any).message;
+          errorMessage = errorObj.message;
         }
       }
       
@@ -129,6 +129,22 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
       setIsSubmitting(false);
     }
   };
+  
+  // Keyboard navigation support
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const target = e.target as HTMLElement;
+        if (target.getAttribute('data-card-value') === String(value)) {
+          e.preventDefault();
+          handleClick();
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [value, handleClick]);
 
   return (
     <motion.div
@@ -138,22 +154,34 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
       animate={isRevealed ? "revealed" : "hidden"}
       variants={variants}
       className={`
-        relative w-24 h-36 rounded-xl transition-all duration-300 shadow-lg
+        relative w-24 h-36 rounded-xl transition-all duration-200 shadow-lg min-w-[44px] min-h-[44px] flex items-center justify-center
         ${canVote 
           ? 'cursor-pointer' 
-          : 'cursor-not-allowed opacity-60'
+          : 'cursor-not-allowed'
         }
         ${isSelected 
-          ? 'ring-4 ring-blue-500 bg-blue-500 text-white' 
+          ? 'text-white transform scale-105 shadow-xl' 
           : canVote 
-            ? 'bg-white hover:bg-gray-50 hover:shadow-xl' 
-            : 'bg-gray-100'
+            ? 'bg-white hover:bg-gray-50 hover:shadow-xl hover:-translate-y-1' 
+            : 'bg-gray-100 opacity-50'
         }
         ${isSubmitting ? 'animate-pulse' : ''}
       `}
+      style={{
+        backgroundColor: isSelected ? 'var(--primary-blue)' : undefined,
+        borderColor: isSelected ? 'var(--primary-blue)' : canVote ? '#E5E7EB' : '#E5E7EB',
+        borderWidth: '2px',
+        borderStyle: 'solid'
+      }}
       onClick={handleClick}
+      role="button"
+      aria-label={`Vote ${value} story points`}
+      aria-pressed={isSelected}
+      aria-disabled={!canVote}
+      tabIndex={!canVote ? -1 : 0}
+      data-card-value={value}
     >
-      <div className="absolute inset-0 flex items-center justify-center text-3xl font-bold">
+      <div className="card-value">
         {isSubmitting ? (
           <LoadingSpinner size="sm" color={isSelected ? 'white' : 'primary'} />
         ) : (
@@ -172,18 +200,7 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
         </motion.div>
       )}
       
-      {/* Disabled overlay */}
-      {!canVote && !isSubmitting && (
-        <div className="absolute inset-0 bg-gray-200 bg-opacity-75 rounded-xl flex items-center justify-center">
-          <span className="text-xs font-medium text-gray-600 text-center px-2">
-            {voting.isRevealed ? 'Revealed' : 
-             !playerId ? 'Join Session' :
-             !hasActiveStory && !hasStories ? 'Create Story' :
-             !hasActiveStory ? 'Select Story' :
-             disabled ? 'Disabled' : 'Cannot Vote'}
-          </span>
-        </div>
-      )}
+      {/* Disabled overlay - removed to clean up UI, disabled state shown through styling */}
     </motion.div>
   );
 }

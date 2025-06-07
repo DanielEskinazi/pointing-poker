@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { HiArrowPath } from 'react-icons/hi2';
 
 export const RecoveryScreen = () => {
   const [progress, setProgress] = useState(0);
@@ -35,7 +35,7 @@ export const RecoveryScreen = () => {
             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
             className="w-16 h-16 mx-auto"
           >
-            <RefreshCw className="w-full h-full text-blue-600" />
+            <HiArrowPath className="w-full h-full text-blue-600" />
           </motion.div>
         </div>
         

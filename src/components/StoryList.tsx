@@ -30,6 +30,14 @@ const StoryItem = ({ story, onSelect, onEdit, onDelete, isActive }: StoryItemPro
         estimate: story.finalEstimate || '-'
       };
     }
+    if (story.votingHistory && !isActive) {
+      return {
+        label: 'Previously Voted',
+        color: 'bg-purple-100 text-purple-800',
+        icon: '📊',
+        estimate: story.finalEstimate || 'See Results'
+      };
+    }
     if (isActive) {
       return {
         label: 'Voting Now',
@@ -116,7 +124,7 @@ const StoryItem = ({ story, onSelect, onEdit, onDelete, isActive }: StoryItemPro
       </div>
 
       {story.description && (
-        <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+        <p className="body-text text-gray-600 mb-2 line-clamp-2">
           {story.description}
         </p>
       )}
@@ -124,7 +132,7 @@ const StoryItem = ({ story, onSelect, onEdit, onDelete, isActive }: StoryItemPro
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>Story #{story.orderIndex + 1}</span>
         {!story.finalEstimate && (
-          <span className="text-gray-400">Not estimated</span>
+          <span style={{ color: 'var(--waiting-gray)' }}>Not estimated</span>
         )}
       </div>
     </motion.div>
@@ -186,9 +194,9 @@ export const StoryList = ({ onEdit, showManagementActions = true, isVotingActive
           className="flex items-center gap-2 text-left flex-1 hover:bg-gray-50 rounded-md p-2 -m-2 transition-colors"
         >
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">Stories</h3>
+            <h3 className="section-title text-gray-900">Stories</h3>
             {stories.length > 0 && (
-              <p className="text-sm text-gray-500">
+              <p className="body-text text-gray-500">
                 {stories.length} {stories.length === 1 ? 'story' : 'stories'}
                 {activeStory && ` • Voting on "${activeStory.title}"`}
               </p>
@@ -209,7 +217,10 @@ export const StoryList = ({ onEdit, showManagementActions = true, isVotingActive
         {showManagementActions && isExpanded && (
           <button
             onClick={() => setIsCreatingStory(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors ml-2"
+            className="flex items-center gap-2 px-3 py-2 text-white rounded-md transition-colors ml-2"
+            style={{ backgroundColor: 'var(--primary-blue)' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--primary-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--primary-blue)'}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

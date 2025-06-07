@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Settings } from 'lucide-react';
+import { HiCog6Tooth } from 'react-icons/hi2';
 import { useGameStore } from '../store';
 import { useCreateSession } from '../hooks/api/useSession';
 import type { CardValue } from '../types';
@@ -106,7 +106,7 @@ export function GameConfig({ tabId }: GameConfigProps) {
       className="max-w-2xl mx-auto bg-white rounded-xl p-8 shadow-lg mt-8"
     >
       <div className="flex items-center gap-3 mb-6">
-        <Settings className="w-6 h-6 text-blue-500" />
+        <HiCog6Tooth className="w-6 h-6 text-blue-500" />
         <h2 className="text-2xl font-bold">Create New Session</h2>
       </div>
 

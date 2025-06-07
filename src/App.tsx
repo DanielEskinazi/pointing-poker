@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Share2 } from "lucide-react";
+import { HiShare } from "react-icons/hi2";
 import { Card } from "./components/Card";
 import { PlayerAvatar } from "./components/PlayerAvatar";
 import { Timer } from "./components/Timer";
@@ -20,6 +20,7 @@ import { StoryList } from "./components/StoryList";
 import { StoryCreatorModal } from "./components/StoryCreator";
 import { VotingProgress } from "./components/VotingProgress";
 import { VotingResults } from "./components/VotingResults";
+import { StoryVotingResults } from "./components/StoryVotingResults";
 import { HostControls } from "./components/HostControls";
 import { useGameStore } from "./store";
 import { useWebSocket } from "./hooks/useWebSocket";
@@ -81,7 +82,6 @@ export default function App() {
   const currentPlayerVoted =
     hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
   const hasActiveStory = !!getCurrentStory();
-  const canVoteOnStory = hasActiveStory && !isRevealing;
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -244,7 +244,7 @@ export default function App() {
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-4">
-                <h1 className="text-4xl font-bold text-gray-800">
+                <h1 className="page-title text-gray-800">
                   Planning Poker
                 </h1>
                 {sessionId && (
@@ -253,7 +253,7 @@ export default function App() {
                       onClick={handleShare}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                     >
-                      <Share2 size={20} />
+                      <HiShare size={20} />
                       Share Session
                     </button>
                     <button
@@ -293,8 +293,8 @@ export default function App() {
                       {/* Current Story Information */}
                       <CurrentStory hasStories={stories.length > 0} />
 
-                      {/* Voting Cards - closer to estimation prompt */}
-                      {!isRevealing && (
+                      {/* Voting Cards - only show when there are stories */}
+                      {hasActiveStory && !isRevealing && (
                         <motion.div
                           className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm"
                           initial={{ opacity: 0, y: 20 }}
@@ -302,8 +302,8 @@ export default function App() {
                           transition={{ delay: 0.3 }}
                         >
                           <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              Choose Your Card
+                            <h3 className="section-title text-gray-900">
+                              Select Your Estimate
                             </h3>
                             {currentPlayerVoted && (
                               <div className="flex items-center gap-2 text-green-600">
@@ -324,22 +324,6 @@ export default function App() {
                               </div>
                             )}
                           </div>
-
-                          {/* Voting status message */}
-                          {!canVoteOnStory && (
-                            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                              <div className="flex items-center gap-2 text-yellow-800">
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                <span className="text-sm font-medium">
-                                  {!hasActiveStory && stories.length === 0 ? 'Create a story to start voting' :
-                                   !hasActiveStory ? 'Select a story from the sidebar to vote' :
-                                   'Voting is currently disabled'}
-                                </span>
-                              </div>
-                            </div>
-                          )}
 
                           {/* Cards Grid */}
                           <motion.div
@@ -377,12 +361,25 @@ export default function App() {
                         </motion.div>
                       )}
 
-                      {/* Voting Results when revealed */}
-                      {isRevealing && (
-                        <VotingErrorBoundary>
-                          <VotingResults />
-                        </VotingErrorBoundary>
-                      )}
+                      {/* Voting Results - show for current reveals or historical results */}
+                      {(() => {
+                        const currentStory = getCurrentStory();
+                        const showCurrentResults = isRevealing && currentStory;
+                        const showHistoricalResults = currentStory && !isRevealing && 
+                          (currentStory.votingHistory || currentStory.completedAt);
+                        
+                        if (showCurrentResults || showHistoricalResults) {
+                          return (
+                            <VotingErrorBoundary>
+                              <StoryVotingResults 
+                                story={currentStory} 
+                                isCurrentlyRevealing={isRevealing}
+                              />
+                            </VotingErrorBoundary>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
 
@@ -395,23 +392,12 @@ export default function App() {
                       currentPlayerId={playerId}
                       isHost={isCurrentUserHost()}
                     />
-                    {!isRevealing && (
-                      <VotingErrorBoundary>
-                        <VotingProgress />
-                      </VotingErrorBoundary>
-                    )}
+                    <VotingErrorBoundary>
+                      <VotingProgress />
+                    </VotingErrorBoundary>
                   </div>
                 </div>
               </SessionErrorBoundary>
-            )}
-
-            {/* Player Avatars */}
-            {currentPlayer && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-12">
-                {players.map((player) => (
-                  <PlayerAvatar key={player.id} player={player} />
-                ))}
-              </div>
             )}
           </div>
 

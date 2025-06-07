@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { HiExclamationTriangle, HiArrowPath, HiHome } from 'react-icons/hi2';
 import { LoadingButton } from '../loading';
 
 interface Props {
@@ -74,7 +74,7 @@ export class ErrorBoundary extends Component<Props, State> {
           >
             <div className="flex justify-center mb-6">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
+                <HiExclamationTriangle className="w-8 h-8 text-red-600" />
               </div>
             </div>
 
@@ -109,7 +109,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 variant="primary"
                 className="flex items-center gap-2"
               >
-                <RefreshCw className="w-4 h-4" />
+                <HiArrowPath className="w-4 h-4" />
                 Try Again
               </LoadingButton>
               
@@ -118,7 +118,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 variant="secondary"
                 className="flex items-center gap-2"
               >
-                <Home className="w-4 h-4" />
+                <HiHome className="w-4 h-4" />
                 Go Home
               </LoadingButton>
             </div>

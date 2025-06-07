@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, RefreshCw, SkipForward } from 'lucide-react';
+import { HiExclamationTriangle, HiArrowPath, HiForward } from 'react-icons/hi2';
 import { LoadingButton } from '../loading';
 
 interface Props {
@@ -69,7 +69,7 @@ export class VotingErrorBoundary extends Component<Props, State> {
         >
           <div className="flex justify-center mb-4">
             <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <HiExclamationTriangle className="w-5 h-5 text-red-600" />
             </div>
           </div>
 
@@ -102,7 +102,7 @@ export class VotingErrorBoundary extends Component<Props, State> {
               size="sm"
               className="flex items-center gap-1"
             >
-              <RefreshCw className="w-4 h-4" />
+              <HiArrowPath className="w-4 h-4" />
               Try Again
             </LoadingButton>
             
@@ -113,7 +113,7 @@ export class VotingErrorBoundary extends Component<Props, State> {
                 size="sm"
                 className="flex items-center gap-1"
               >
-                <SkipForward className="w-4 h-4" />
+                <HiForward className="w-4 h-4" />
                 Skip
               </LoadingButton>
             )}

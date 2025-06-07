@@ -9,17 +9,23 @@ interface CurrentStoryProps {
 export const CurrentStory = ({
   hasStories = false,
 }: CurrentStoryProps) => {
-  const { getCurrentStory, currentStory } = useGameStore();
+  const { 
+    getCurrentStory, 
+    currentStory, 
+    players, 
+    voting, 
+    isRevealing 
+  } = useGameStore();
 
   const activeStory = getCurrentStory();
 
-  // Fallback to old currentStory string if no structured story
+  // Show consolidated empty state when no stories or no active story
   if (!activeStory && !currentStory) {
     return (
       <EmptyState
         icon={
           <svg
-            className="w-12 h-12 mx-auto"
+            className="w-16 h-16 mx-auto"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -32,15 +38,13 @@ export const CurrentStory = ({
             />
           </svg>
         }
-        title={
-          hasStories ? "Select a story to estimate" : "No stories created yet"
-        }
+        title="Ready to start estimating?"
         description={
           hasStories
             ? "Choose a story from the sidebar to begin estimation"
-            : "Create your first story to start the estimation process"
+            : "Create your first story to begin the planning session"
         }
-        variant="default"
+        variant="subtle"
       />
     );
   }
@@ -70,7 +74,7 @@ export const CurrentStory = ({
               }`}
             />
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="section-title text-gray-900">
                 Current Story
               </h3>
               <span
@@ -97,13 +101,141 @@ export const CurrentStory = ({
 
         <div className="space-y-3">
           <div>
-            <h4 className="font-medium text-gray-900 mb-1">{storyTitle}</h4>
+            <h4 className="section-title text-gray-900 mb-1">{storyTitle}</h4>
             {storyDescription && (
-              <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
+              <p className="body-text text-gray-600 whitespace-pre-wrap">
                 {storyDescription}
               </p>
             )}
           </div>
+
+          {/* Interactive Voting Progress Tracker */}
+          {activeStory && !isRevealing && storyStatus === "active" && (
+            <div className="pt-3">
+              {(() => {
+                const votingPlayers = players.filter((player) => !player.isSpectator);
+                const votedPlayers = votingPlayers.filter((player) => {
+                  return !!voting.votes[player.id] || !!player.selectedCard;
+                });
+                const pendingPlayers = votingPlayers.filter((player) => {
+                  return !(!!voting.votes[player.id] || !!player.selectedCard);
+                });
+                const votedPercentage = votingPlayers.length > 0 
+                  ? (votedPlayers.length / votingPlayers.length) * 100 
+                  : 0;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Voting Progress</span>
+                      <span className="text-gray-500">
+                        {votedPlayers.length}/{votingPlayers.length} voted
+                      </span>
+                    </div>
+                    
+                    {/* Interactive Voting Box */}
+                    <div 
+                      className="relative h-16 rounded-lg border-2 border-gray-200 overflow-hidden transition-all duration-500"
+                      style={{
+                        background: `linear-gradient(to right, 
+                          var(--success-green) 0%, 
+                          var(--success-green) ${votedPercentage}%, 
+                          #F3F4F6 ${votedPercentage}%, 
+                          #F3F4F6 100%)`
+                      }}
+                    >
+                      {/* Voted Players (Left Side) */}
+                      <div className="absolute left-0 top-0 h-full flex items-center gap-1 px-2">
+                        {votedPlayers.map((player, index) => (
+                          <motion.div
+                            key={player.id}
+                            initial={{ x: 200, scale: 0.8 }}
+                            animate={{ x: 0, scale: 1 }}
+                            transition={{ 
+                              type: "spring", 
+                              stiffness: 150, 
+                              damping: 20,
+                              delay: index * 0.1 
+                            }}
+                            className="relative"
+                          >
+                            <div
+                              className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-xs font-medium shadow-sm"
+                              style={{
+                                backgroundColor: "white",
+                                color: "var(--success-green)",
+                              }}
+                              title={`${player.name} has voted`}
+                            >
+                              {player.avatar || player.name.charAt(0).toUpperCase()}
+                            </div>
+                            {/* Checkmark overlay */}
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-600 rounded-full flex items-center justify-center">
+                              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      {/* Pending Players (Right Side) */}
+                      <div className="absolute right-0 top-0 h-full flex items-center gap-1 px-2">
+                        {pendingPlayers.map((player, index) => (
+                          <motion.div
+                            key={player.id}
+                            initial={{ x: 0 }}
+                            animate={{ x: 0 }}
+                            className="relative"
+                          >
+                            <div
+                              className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs font-medium"
+                              style={{
+                                backgroundColor: "#E5E7EB",
+                                color: "#6B7280",
+                              }}
+                              title={`${player.name} hasn't voted yet`}
+                            >
+                              {player.avatar || player.name.charAt(0).toUpperCase()}
+                            </div>
+                            {/* Waiting indicator */}
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-pulse">
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      {/* Center divider line */}
+                      {votedPlayers.length > 0 && pendingPlayers.length > 0 && (
+                        <motion.div
+                          className="absolute top-0 h-full w-0.5 bg-white/50"
+                          initial={{ left: '50%' }}
+                          animate={{ left: `${votedPercentage}%` }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                        />
+                      )}
+
+                      {/* Completion celebration */}
+                      {votedPlayers.length === votingPlayers.length && votingPlayers.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="absolute inset-0 flex items-center justify-center"
+                        >
+                          <div className="text-white font-semibold text-sm flex items-center gap-1">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            All votes in!
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {activeStory && (
             <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">

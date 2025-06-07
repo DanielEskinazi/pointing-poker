@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Timer as TimerIcon, Pause, Play, Square, Plus, RotateCcw, Settings } from 'lucide-react';
+import { HiClock as TimerIcon, HiPause, HiPlay, HiStop, HiPlus, HiArrowUturnLeft, HiCog6Tooth } from 'react-icons/hi2';
 import { useGameStore } from '../store';
 
 interface TimerDisplayProps {
@@ -42,13 +42,13 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
   };
 
   const getTimerColor = () => {
-    if (!isWarning) return 'text-gray-700';
+    if (!isWarning) return 'timer-display';
     
     switch (warningLevel) {
-      case 'low': return 'text-yellow-600';
-      case 'medium': return 'text-orange-600';
-      case 'high': return 'text-red-600';
-      default: return 'text-gray-700';
+      case 'low': return 'timer-display' + ' text-yellow-600';
+      case 'medium': return 'timer-display' + ' text-orange-600';
+      case 'high': return 'timer-display' + ' text-red-600';
+      default: return 'timer-display';
     }
   };
 
@@ -85,7 +85,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
             className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
             title="Configure timer"
           >
-            <Settings size={16} />
+            <HiCog6Tooth size={16} />
           </button>
         )}
       </div>
@@ -93,7 +93,13 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
       {/* Timer Display */}
       <div className="text-center mb-4">
         <motion.div
-          className={`text-4xl font-mono font-bold ${getTimerColor()} transition-colors`}
+          className={`${getTimerColor()} transition-colors font-variant-numeric-tabular`}
+          style={{ 
+            fontSize: '32px',
+            fontWeight: 700,
+            fontFamily: 'monospace',
+            color: !isWarning ? 'var(--primary-blue)' : undefined
+          }}
           animate={warningLevel === 'high' ? { scale: [1, 1.05, 1] } : {}}
           transition={{ duration: 1, repeat: warningLevel === 'high' ? Infinity : 0 }}
         >
@@ -134,7 +140,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
                 onClick={timerState.isPaused ? resumeTimer : startTimer}
                 className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm"
               >
-                <Play size={14} />
+                <HiPlay size={14} />
                 {timerState.isPaused ? 'Resume' : 'Start'}
               </button>
             ) : (
@@ -142,7 +148,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
                 onClick={pauseTimer}
                 className="flex items-center gap-1 px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors text-sm"
               >
-                <Pause size={14} />
+                <HiPause size={14} />
                 Pause
               </button>
             )}
@@ -151,7 +157,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
               onClick={stopTimer}
               className="flex items-center gap-1 px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm"
             >
-              <Square size={14} />
+              <HiStop size={14} />
               Stop
             </button>
             
@@ -159,7 +165,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
               onClick={resetTimer}
               className="flex items-center gap-1 px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-sm"
             >
-              <RotateCcw size={14} />
+              <HiArrowUturnLeft size={14} />
               Reset
             </button>
           </div>
@@ -172,7 +178,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
                 className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
                 title="Add 30 seconds"
               >
-                <Plus size={12} />
+                <HiPlus size={12} />
                 30s
               </button>
               <button
@@ -180,7 +186,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
                 className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
                 title="Add 1 minute"
               >
-                <Plus size={12} />
+                <HiPlus size={12} />
                 1m
               </button>
               <button
@@ -188,7 +194,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
                 className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
                 title="Add 5 minutes"
               >
-                <Plus size={12} />
+                <HiPlus size={12} />
                 5m
               </button>
             </div>

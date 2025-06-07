@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Clock, Play, Settings2, Volume2, VolumeX } from 'lucide-react';
+import { HiXMark, HiClock, HiPlay, HiCog8Tooth, HiSpeakerWave, HiSpeakerXMark } from 'react-icons/hi2';
 import { useGameStore } from '../store';
 import type { TimerConfiguration } from '../types';
 
@@ -67,14 +67,14 @@ export const TimerConfig = ({ isOpen, onClose }: TimerConfigProps) => {
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center gap-2">
-                <Settings2 className="text-blue-600" size={20} />
+                <HiCog8Tooth className="text-blue-600" size={20} />
                 <h2 className="text-lg font-semibold text-gray-900">Timer Settings</h2>
               </div>
               <button
                 onClick={onClose}
                 className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <X size={20} />
+                <HiXMark size={20} />
               </button>
             </div>
 
@@ -185,9 +185,9 @@ export const TimerConfig = ({ isOpen, onClose }: TimerConfigProps) => {
                       />
                       <div className="flex items-center gap-2">
                         {config.settings.audioEnabled ? (
-                          <Volume2 size={16} className="text-gray-500" />
+                          <HiSpeakerWave size={16} className="text-gray-500" />
                         ) : (
-                          <VolumeX size={16} className="text-gray-500" />
+                          <HiSpeakerXMark size={16} className="text-gray-500" />
                         )}
                         <div>
                           <div className="text-sm font-medium text-gray-700">Audio alerts</div>

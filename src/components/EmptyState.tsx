@@ -22,11 +22,11 @@ export const EmptyState = ({
   const getVariantClasses = () => {
     switch (variant) {
       case 'subtle':
-        return 'bg-gray-50 border-gray-200';
+        return 'bg-gray-50 border-gray-200 shadow-sm';
       case 'primary':
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-blue-50 border-blue-200 shadow-sm';
       default:
-        return 'bg-gray-50 border-gray-300 border-dashed';
+        return 'bg-gray-50 shadow-sm border-gray-200';
     }
   };
 
@@ -34,7 +34,7 @@ export const EmptyState = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-lg p-6 border-2 ${getVariantClasses()}`}
+      className={`rounded-lg p-8 border ${getVariantClasses()}`}
     >
       <div className="text-center">
         {icon && (
@@ -51,7 +51,10 @@ export const EmptyState = ({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={action.onClick}
-            className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+            className="inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors"
+            style={{ backgroundColor: 'var(--primary-blue)' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--primary-hover)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--primary-blue)'}
           >
             {action.label}
           </motion.button>

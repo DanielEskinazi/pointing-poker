@@ -251,7 +251,7 @@ export class VotingService {
               description: updatedStory.description || undefined,
               finalEstimate: updatedStory.finalEstimate || undefined,
               orderIndex: updatedStory.orderIndex,
-              isActive: updatedStory.isActive
+              isActive: updatedStory.isActive ?? true
             }
           });
         }

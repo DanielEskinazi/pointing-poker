@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle } from 'lucide-react';
+import { HiExclamationCircle } from 'react-icons/hi2';
 
 interface ValidatedInputProps {
   label: string;
@@ -94,7 +94,7 @@ export function ValidatedInput({
         
         {showError && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <AlertCircle className="h-5 w-5 text-red-500" />
+            <HiExclamationCircle className="h-5 w-5 text-red-500" />
           </div>
         )}
       </div>
@@ -115,7 +115,7 @@ export function ValidatedInput({
             className="text-sm text-red-600 flex items-center gap-1"
             role="alert"
           >
-            <AlertCircle className="h-3 w-3 flex-shrink-0" />
+            <HiExclamationCircle className="h-3 w-3 flex-shrink-0" />
             {error}
           </p>
         )}
