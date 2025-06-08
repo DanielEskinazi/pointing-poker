@@ -8,7 +8,7 @@ interface StoryVotingResultsProps {
 }
 
 export const StoryVotingResults = ({ story, isCurrentlyRevealing = false }: StoryVotingResultsProps) => {
-  const { voting, players } = useGameStore();
+  const { voting, players, resetVoting } = useGameStore();
 
   // Use current voting data if story is currently being revealed, otherwise use historical data
   const votingData: VotingHistoryData | null = isCurrentlyRevealing && story.isActive
@@ -214,6 +214,15 @@ export const StoryVotingResults = ({ story, isCurrentlyRevealing = false }: Stor
                     Average: {consensus.averageValue.toFixed(1)} points
                   </div>
                 )}
+                {/* Reset button for active story only */}
+                {isCurrentlyRevealing && story.isActive && (
+                  <button
+                    onClick={() => resetVoting()}
+                    className="mt-3 px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-md font-medium transition-colors"
+                  >
+                    🔄 Start New Round
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -243,6 +252,21 @@ export const StoryVotingResults = ({ story, isCurrentlyRevealing = false }: Stor
             </div>
           )}
         </div>
+
+        {/* Additional reset button outside cards for better visibility */}
+        {isCurrentlyRevealing && story.isActive && !consensus?.hasConsensus && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600 mb-3">
+              No consensus was reached. Would you like to vote again?
+            </p>
+            <button
+              onClick={() => resetVoting()}
+              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+            >
+              🔄 Start Another Round
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );

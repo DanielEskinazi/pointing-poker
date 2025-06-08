@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-// Valid card values for planning poker
-const VALID_CARD_VALUES = [
-  '0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕', 'coffee'
-];
+// Removed card value restrictions - users can now input any values
 
 // Emoji validation (basic check for single emoji)
 const emojiRegex = /^[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]$/u;
@@ -16,11 +13,7 @@ export const SubmitVoteSchema = z.object({
     storyId: z.string().min(1, 'Story ID is required'), // Allow any string, not just UUID
     value: z.string()
       .min(1, 'Vote value is required')
-      .max(10, 'Vote value must be 10 characters or less')
-      .refine(
-        (val) => VALID_CARD_VALUES.includes(val),
-        `Invalid vote value. Must be one of: ${VALID_CARD_VALUES.join(', ')}`
-      ),
+      .max(10, 'Vote value must be 10 characters or less'),
     confidence: z.number()
       .min(1, 'Confidence must be between 1-5')
       .max(5, 'Confidence must be between 1-5')

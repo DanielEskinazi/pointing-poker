@@ -293,8 +293,12 @@ export default function App() {
                       {/* Current Story Information */}
                       <CurrentStory hasStories={stories.length > 0} />
 
-                      {/* Voting Cards - only show when there are stories */}
-                      {hasActiveStory && !isRevealing && (
+                      {/* Voting Cards - only show when there are stories and story is not completed */}
+                      {(() => {
+                        const currentStory = getCurrentStory();
+                        const isStoryCompleted = currentStory && (currentStory.votingHistory || currentStory.completedAt);
+                        return hasActiveStory && !isRevealing && !isStoryCompleted;
+                      })() && (
                         <motion.div
                           className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm"
                           initial={{ opacity: 0, y: 20 }}
@@ -352,7 +356,7 @@ export default function App() {
                                   value={value}
                                   isSelected={selectedCard === value}
                                   isRevealed={isRevealing}
-                                  playerId={playerId}
+                                  playerId={playerId || undefined}
                                   onClick={() => handleCardSelect(value)}
                                 />
                               </motion.div>
@@ -389,7 +393,7 @@ export default function App() {
                       isVotingActive={hasActiveStory && !isRevealing}
                     />
                     <HostControls
-                      currentPlayerId={playerId}
+                      currentPlayerId={playerId || undefined}
                       isHost={isCurrentUserHost()}
                     />
                     <VotingErrorBoundary>

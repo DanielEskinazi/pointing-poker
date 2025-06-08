@@ -5,12 +5,13 @@ import { useGameStore } from '../store';
 import { useCreateSession } from '../hooks/api/useSession';
 import type { CardValue } from '../types';
 
-// Valid card values that match backend validation
-// Backend accepts: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕']
+// Available avatar options for hosts (same as join form)
+const AVATARS = ['👩‍💻', '🧙‍♂️', '🦊', '🚀', '🥷', '🎮', '☕', '🐧', '🔮', '🎯', '🤖', '🦄'];
+
 const PRESET_CONFIGS = {
   fibonacci: ['1', '2', '3', '5', '8', '13', '21', '34'],
   modified: ['0', '1', '2', '3', '5', '8', '13'],
-  special: ['1', '2', '3', '5', '8', '?', '☕'], // Using valid special characters
+  special: ['1', '2', '3', '5', '8', '?', '☕'],
 } as const;
 
 interface GameConfigProps {
@@ -20,6 +21,7 @@ interface GameConfigProps {
 export function GameConfig({ tabId }: GameConfigProps) {
   const [customValues, setCustomValues] = useState<string>('');
   const [hostName, setHostName] = useState<string>('');
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
   const [isCreating, setIsCreating] = useState(false);
   const { setCardValues, setIsConfigured, joinSession } = useGameStore();
   const createSession = useCreateSession();
@@ -38,7 +40,7 @@ export function GameConfig({ tabId }: GameConfigProps) {
       const result = await createSession.mutateAsync({
         name: 'Planning Poker Session',
         hostName: name.trim(),
-        hostAvatar: '👤',
+        hostAvatar: selectedAvatar,
         config: {
           cardValues,
           timerSeconds: 60,
@@ -64,6 +66,7 @@ export function GameConfig({ tabId }: GameConfigProps) {
       // Clear form state after successful creation
       setHostName('');
       setCustomValues('');
+      setSelectedAvatar(AVATARS[0]);
     } catch (error) {
       console.error('Failed to create session:', error);
       alert('Failed to create session. Please try again.');
@@ -78,22 +81,24 @@ export function GameConfig({ tabId }: GameConfigProps) {
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const VALID_CARD_VALUES = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
     
     const inputValues = customValues
       .split(',')
       .map(v => v.trim())
       .filter(Boolean);
     
-    // Validate that all values are in the allowed list
-    const invalidValues = inputValues.filter(v => !VALID_CARD_VALUES.includes(v));
-    if (invalidValues.length > 0) {
-      alert(`Invalid card values: ${invalidValues.join(', ')}.\nAllowed values: ${VALID_CARD_VALUES.join(', ')}`);
-      return;
+    // Remove duplicates while preserving order
+    const uniqueValues = [...new Set(inputValues)];
+    
+    // Notify user if duplicates were removed
+    const duplicatesRemoved = inputValues.length - uniqueValues.length;
+    if (duplicatesRemoved > 0) {
+      const message = `Removed ${duplicatesRemoved} duplicate value${duplicatesRemoved > 1 ? 's' : ''}. Using: ${uniqueValues.join(', ')}`;
+      alert(message);
     }
     
-    if (inputValues.length > 0) {
-      handleCreateSession(inputValues as CardValue[], hostName);
+    if (uniqueValues.length > 0) {
+      handleCreateSession(uniqueValues as CardValue[], hostName);
     } else {
       alert('Please enter at least one card value');
     }
@@ -123,6 +128,29 @@ export function GameConfig({ tabId }: GameConfigProps) {
             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             disabled={isCreating}
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Choose Your Avatar
+          </label>
+          <div className="flex gap-2 flex-wrap">
+            {AVATARS.map((avatar) => (
+              <button
+                key={avatar}
+                type="button"
+                onClick={() => setSelectedAvatar(avatar)}
+                className={`w-12 h-12 text-xl flex items-center justify-center rounded-full transition-all ${
+                  selectedAvatar === avatar
+                    ? 'bg-blue-100 ring-2 ring-blue-500'
+                    : 'hover:bg-gray-100'
+                } ${isCreating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isCreating}
+              >
+                {avatar}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>

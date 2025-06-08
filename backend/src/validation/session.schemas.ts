@@ -1,12 +1,9 @@
 import { z } from 'zod';
 
-// Common card values for planning poker
-const VALID_CARD_VALUES = [
-  '0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'
-];
+// Removed card value restrictions - users can now input any values
 
-// Emoji validation (basic check for single emoji)
-const emojiRegex = /^[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]$/u;
+// Emoji validation - comprehensive regex for emojis including ZWJ sequences
+const emojiRegex = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*$/u;
 
 export const CreateSessionSchema = z.object({
   body: z.object({
@@ -30,10 +27,6 @@ export const CreateSessionSchema = z.object({
       cardValues: z.array(z.string())
         .min(2, 'At least 2 card values required')
         .max(20, 'Maximum 20 card values allowed')
-        .refine(
-          (values) => values.every(val => VALID_CARD_VALUES.includes(val)),
-          'Invalid card values'
-        )
         .default(['1', '2', '3', '5', '8', '13', '?']),
       allowSpectators: z.boolean().default(true),
       autoRevealCards: z.boolean().default(false),
@@ -84,10 +77,6 @@ export const UpdateSessionSchema = z.object({
       cardValues: z.array(z.string())
         .min(2, 'At least 2 card values required')
         .max(20, 'Maximum 20 card values allowed')
-        .refine(
-          (values) => values.every(val => VALID_CARD_VALUES.includes(val)),
-          'Invalid card values'
-        )
         .optional(),
       allowSpectators: z.boolean().optional(),
       autoRevealCards: z.boolean().optional(),

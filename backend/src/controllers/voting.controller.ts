@@ -136,6 +136,23 @@ export class VotingController {
     }
   };
 
+  resetVoting = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { sessionId } = req.params;
+
+      await this.votingService.resetVoting(sessionId);
+
+      const response: ApiResponse = {
+        success: true,
+        data: { message: 'Voting reset successfully' }
+      };
+
+      res.json(response);
+    } catch (error) {
+      this.handleError(error as Error, res, 'Failed to reset voting');
+    }
+  };
+
   private handleError(error: Error, res: Response, defaultMessage: string): void {
     logger.error(defaultMessage, { error: error.message, stack: error.stack });
     

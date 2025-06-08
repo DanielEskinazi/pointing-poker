@@ -360,6 +360,51 @@ export class VotingService {
     }
   }
 
+  async resetVoting(sessionId: string): Promise<void> {
+    try {
+      // Reset session voting state without deactivating story
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: sessionId }
+      });
+
+      if (session) {
+        const currentConfig = session.config as Prisma.JsonValue;
+        const updatedConfig = {
+          ...(typeof currentConfig === 'object' && currentConfig !== null ? currentConfig : {}),
+          cardsRevealed: false
+        };
+
+        await db.getPrisma().session.update({
+          where: { id: sessionId },
+          data: { config: updatedConfig }
+        });
+      }
+
+      // Clear all votes for current story
+      const currentStory = await this.getCurrentStory(sessionId);
+      if (currentStory) {
+        await db.getPrisma().vote.deleteMany({
+          where: { storyId: currentStory.id }
+        });
+      }
+
+      // Emit reset event
+      this.eventEmitter.emit('game:reset', { sessionId });
+
+      // Broadcast to WebSocket if available
+      if (wsServer) {
+        wsServer.emitToSession(sessionId, ServerEvents.GAME_RESET, {
+          storyId: currentStory?.id || ''
+        });
+      }
+
+      logger.info('Voting reset successfully', { sessionId });
+    } catch (error) {
+      logger.error('Failed to reset voting:', error);
+      throw new Error('Failed to reset voting');
+    }
+  }
+
   calculateConsensus(votes: Vote[]): ConsensusResult | null {
     if (!votes.length) return null;
 

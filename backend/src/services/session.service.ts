@@ -233,12 +233,7 @@ export class SessionService {
   async joinSession(sessionId: string, data: JoinSessionDto): Promise<JoinSessionResponse> {
     try {
       const session = await db.getPrisma().session.findUnique({
-        where: { id: sessionId, isActive: true },
-        include: {
-          players: {
-            where: { name: data.name }
-          }
-        }
+        where: { id: sessionId, isActive: true }
       });
 
       if (!session) {
@@ -261,59 +256,24 @@ export class SessionService {
         throw new Error('Password required');
       }
 
-      // Check if name already taken by active player
-      const existingActivePlayer = session.players.find(p => p.isActive);
-      if (existingActivePlayer) {
-        throw new Error('Name already taken');
-      }
-
-      // Create or reactivate player
-      let player;
-      const existingPlayer = session.players[0]; // First player with this name
-
-      if (existingPlayer) {
-        // Reactivate existing player
-        player = await db.getPrisma().player.update({
-          where: { id: existingPlayer.id },
-          data: {
-            isActive: true,
-            avatar: data.avatar,
-            isSpectator: data.isSpectator || false,
-            lastSeenAt: new Date()
-          }
-        });
-      } else {
-        // Create new player
-        logger.info('Creating new player in database', { sessionId, name: data.name });
-        
-        player = await db.getPrisma().player.create({
-          data: {
-            sessionId,
-            name: data.name,
-            avatar: data.avatar,
-            isSpectator: data.isSpectator || false,
-            isActive: true
-          }
-        });
-        
-        logger.info('Player created successfully', { 
-          sessionId, 
-          playerId: player.id,
-          name: player.name
-        });
-        
-        // Verify player was created by querying it
-        const verifyPlayer = await db.getPrisma().player.findUnique({
-          where: { id: player.id }
-        });
-        
-        logger.info('Player verification after create', {
+      // Create new player - duplicates names are allowed, avatars provide visual distinction
+      logger.info('Creating new player in database', { sessionId, name: data.name });
+      
+      const player = await db.getPrisma().player.create({
+        data: {
           sessionId,
-          playerId: player.id,
-          found: !!verifyPlayer,
-          playerName: verifyPlayer?.name
-        });
-      }
+          name: data.name,
+          avatar: data.avatar,
+          isSpectator: data.isSpectator || false,
+          isActive: true
+        }
+      });
+        
+      logger.info('Player created successfully', { 
+        sessionId, 
+        playerId: player.id,
+        name: player.name
+      });
 
       // Generate player token
       const token = generateToken({

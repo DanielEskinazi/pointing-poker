@@ -39,7 +39,6 @@ model Player {
   hostedSessions Session[] @relation("SessionHost")
   votes          Vote[]
 
-  @@unique([sessionId, name])
   @@index([sessionId, isActive], map: "idx_players_session")
   @@map("players")
 }

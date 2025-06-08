@@ -34,4 +34,8 @@ router.post('/sessions/:sessionId/reset',
   controller.resetGame
 );
 
+router.post('/sessions/:sessionId/reset-voting',
+  controller.resetVoting
+);
+
 export default router;

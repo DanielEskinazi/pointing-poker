@@ -429,6 +429,12 @@ export class WebSocketClient {
     }
   }
 
+  // Game management methods
+  resetGame() {
+    console.log('🔄 Emitting game reset via WebSocket');
+    this.emit('game:reset', {});
+  }
+
   disconnect() {
     // Stop activity tracking
     this.stopActivityTracking();

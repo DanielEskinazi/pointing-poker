@@ -5,7 +5,7 @@ import { useJoinSession } from '../hooks/api/useSession';
 import { authTokenManager } from '../services/auth/tokenManager';
 import { apiClient } from '../services/api/client';
 
-const AVATARS = ['👩‍💻', '👨‍💻', '🧙‍♂️', '🦄', '🚀', '🎮', '🤖', '🦸‍♂️'];
+const AVATARS = ['👩‍💻', '🧙‍♂️', '🦊', '🚀', '🥷', '🎮', '☕', '🐧', '🔮', '🎯', '🤖', '🦄'];
 
 interface JoinGameProps {
   sessionId: string;
