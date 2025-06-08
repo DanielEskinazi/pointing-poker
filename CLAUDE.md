@@ -95,6 +95,16 @@ Use GitHub MCP tools (prefixed with mcp**github**) for all GitHub operations: pu
 
 You have access to Playwright MCP for browser automation. Can navigate pages, interact with elements, take screenshots, extract content, fill forms, and execute JavaScript. Always navigate first, wait for elements to load, use specific selectors, and close browsers when done.
 
+## WebSocket Broadcasting Check
+
+For any new feature or fix, ensure proper WebSocket broadcasting:
+
+1. **Backend**: Add `wsServer.emitToSession(sessionId, eventName, data)` after state changes
+2. **Frontend**: Add event handler in `/src/services/websocket/client.ts` and `/src/store.ts`
+3. **Test**: Open multiple tabs, verify all clients update simultaneously
+
+Always ask: "Does this change need to sync across all connected clients?"
+
 ## Logging
 
 Log Structure:
