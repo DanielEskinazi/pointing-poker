@@ -829,15 +829,21 @@ export const useGameStore = create<GameStore>()(
   },
 
   resetVoting: async () => {
-    const { sessionId } = get();
+    const { sessionId, stories, getCurrentStory } = get();
     
     if (!sessionId) {
       throw new Error('No session ID available');
     }
 
+    console.log('🔄 resetVoting called - resetting voting state via backend');
+
     try {
-      await votingApi.resetGame(sessionId);
+      // Call new resetVoting API that doesn't deactivate the story
+      await votingApi.resetVoting(sessionId);
       
+      const currentStory = getCurrentStory();
+      
+      // Reset state locally 
       set(state => ({
         ...state,
         isRevealing: false,
@@ -848,16 +854,27 @@ export const useGameStore = create<GameStore>()(
           consensus: null,
           votingResults: [],
           currentStoryId: state.voting.currentStoryId,
+          voteCount: 0,
+          totalPlayers: state.voting.totalPlayers
         },
         players: state.players.map(p => ({
           ...p,
           selectedCard: null,
           isRevealed: false,
+          votedInCurrentRound: false
         })),
+        // Clear voting history from current story to prevent showing old results
+        stories: state.stories.map(story => 
+          story.id === currentStory?.id 
+            ? { ...story, votingHistory: undefined, completedAt: undefined }
+            : story
+        ),
         lastSync: new Date()
       }));
+
+      console.log('✅ Voting state reset complete via backend, story remains active');
     } catch (error) {
-      console.error('Error resetting voting:', error);
+      console.error('❌ Error resetting voting:', error);
       throw error;
     }
   },
@@ -1075,23 +1092,33 @@ export const useGameStore = create<GameStore>()(
   },
 
   handleGameReset: () => {
+    const currentStory = get().getCurrentStory();
+    
     set(state => ({
+      ...state,
       isRevealing: false,
-      timer: initialState.timer,
-      currentStory: initialState.currentStory,
       voting: {
-        ...state.voting,
         votes: {},
         isRevealed: false,
         hasVoted: false,
         consensus: null,
-        votingResults: []
+        votingResults: [],
+        currentStoryId: state.voting.currentStoryId,
+        voteCount: 0,
+        totalPlayers: state.voting.totalPlayers
       },
       players: state.players.map(p => ({
         ...p,
         selectedCard: null,
-        isRevealed: false
+        isRevealed: false,
+        votedInCurrentRound: false
       })),
+      // Clear voting history from current story to prevent showing old results
+      stories: state.stories.map(story => 
+        story.id === currentStory?.id 
+          ? { ...story, votingHistory: undefined, completedAt: undefined }
+          : story
+      ),
       lastSync: new Date()
     }));
   },

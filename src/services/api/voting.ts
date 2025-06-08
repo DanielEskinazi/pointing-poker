@@ -17,5 +17,9 @@ export const votingApi = {
   
   resetGame: async (sessionId: string, newStory?: StoryData) => {
     return apiClient.post(`/sessions/${sessionId}/reset`, { newStory });
+  },
+  
+  resetVoting: async (sessionId: string) => {
+    return apiClient.post(`/sessions/${sessionId}/reset-voting`, {});
   }
 };

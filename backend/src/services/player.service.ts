@@ -92,18 +92,7 @@ export class PlayerService {
           throw new Error('Player not found');
         }
 
-        const existingPlayer = await db.getPrisma().player.findFirst({
-          where: {
-            sessionId: player.sessionId,
-            name: data.name,
-            isActive: true,
-            id: { not: playerId }
-          }
-        });
-
-        if (existingPlayer) {
-          throw new Error('Name already taken');
-        }
+        // Allow duplicate names - avatars provide visual distinction
       }
 
       const updatedPlayer = await db.getPrisma().player.update({
