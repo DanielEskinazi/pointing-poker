@@ -727,7 +727,13 @@ export const useGameStore = create<GameStore>()(
       throw new Error('No story available to vote on. Please create a story first.');
     }
     
-    console.log('Submitting vote:', { playerId, value, currentStory, sessionId });
+    console.log('🗳️ SUBMITTING VOTE:', { 
+      playerId, 
+      value, 
+      valueType: typeof value,
+      currentStory: currentStory?.id,
+      sessionId 
+    });
     
     try {
       // Optimistic update
@@ -1013,7 +1019,14 @@ export const useGameStore = create<GameStore>()(
 
   handleVoteSubmitted: (data: VoteSubmittedData) => {
     set(state => {
-      console.log('Handling vote submitted:', data);
+      const currentPlayerId = get().getCurrentPlayerId();
+      console.log('🔍 handleVoteSubmitted DEBUG:', {
+        eventData: data,
+        currentPlayerId,
+        isCurrentPlayer: data.playerId === currentPlayerId,
+        currentVotingState: state.voting.votes,
+        currentPlayerVote: state.voting.votes[data.playerId]
+      });
       
       // Update voting state with the global vote count from backend
       const updatedVoting = {
@@ -1023,11 +1036,15 @@ export const useGameStore = create<GameStore>()(
       };
       
       // If the vote is for a different player, add it to votes tracking
-      if (data.hasVoted && data.playerId) {
+      // BUT don't override the current player's actual vote value
+      if (data.hasVoted && data.playerId && data.playerId !== currentPlayerId) {
+        console.log('📝 Setting vote to ? for OTHER player:', data.playerId);
         updatedVoting.votes = {
           ...state.voting.votes,
-          [data.playerId]: '?' // We don't get the actual value until reveal
+          [data.playerId]: '?' // We don't get the actual value until reveal for other players
         };
+      } else {
+        console.log('⏭️ SKIPPING vote override for current player:', data.playerId);
       }
       
       const updatedPlayers = state.players.map(p =>
@@ -1294,12 +1311,33 @@ export const useGameStore = create<GameStore>()(
   // Player utility methods
   getCurrentPlayerId: () => {
     const sessionId = get().sessionId;
-    return sessionId ? localStorage.getItem(`player_${sessionId}`) : null;
+    if (!sessionId) return null;
+    
+    // Try to find any key that matches the pattern player_sessionId_* (tab-specific keys)
+    const keys = Object.keys(localStorage);
+    const matchingKey = keys.find(key => key.startsWith(`player_${sessionId}_`));
+    
+    let playerId = null;
+    if (matchingKey) {
+      playerId = localStorage.getItem(matchingKey);
+    } else {
+      // Fallback to old format for backward compatibility
+      playerId = localStorage.getItem(`player_${sessionId}`);
+    }
+    
+    console.log('🔍 getCurrentPlayerId result:', {
+      sessionId,
+      playerId,
+      matchingKey,
+      allLocalStorageKeys: Object.keys(localStorage).filter(k => k.includes('player'))
+    });
+    
+    return playerId;
   },
 
   getCurrentPlayer: () => {
     const state = get();
-    const playerId = state.sessionId ? localStorage.getItem(`player_${state.sessionId}`) : null;
+    const playerId = get().getCurrentPlayerId(); // Use the updated getCurrentPlayerId method
     return state.players.find(p => p.id === playerId) || null;
   },
 

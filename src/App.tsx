@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { HiShare } from "react-icons/hi2";
 import { Card } from "./components/Card";
@@ -34,6 +34,12 @@ import type { CardValue } from "./types";
 
 export default function App() {
   const [selectedCard, setSelectedCard] = useState<CardValue | null>(null);
+  const [userVotedCard, setUserVotedCard] = useState<CardValue | null>(null);
+  const [hasUserVoted, setHasUserVoted] = useState(false);
+  
+  // Use ref for immediate vote tracking without waiting for state updates
+  const votedCardRef = useRef<CardValue | null>(null);
+  const hasVotedRef = useRef<boolean>(false);
   const {
     players,
     isRevealing,
@@ -51,8 +57,9 @@ export default function App() {
     voting,
     stories,
     getCurrentStory,
+    getCurrentPlayerId,
   } = useGameStore();
-  const [playerId, setPlayerId] = useState<string | null>(null);
+  // Use store's getCurrentPlayerId() instead of local state to ensure consistency
   const [timerKey, setTimerKey] = useState(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
 
@@ -70,18 +77,35 @@ export default function App() {
   } = useSession(sessionId || "");
 
   // Initialize WebSocket connection with playerId
-  const { connected, emit } = useWebSocket(playerId);
+  const currentPlayerId = getCurrentPlayerId();
+  const { connected, emit } = useWebSocket(currentPlayerId);
 
   // Ensure consistent player identification across tabs and re-renders
   const currentPlayer = useMemo(() => {
-    return playerId ? players.find((p) => p.id === playerId) || null : null;
-  }, [players, playerId]);
+    return currentPlayerId ? players.find((p) => p.id === currentPlayerId) || null : null;
+  }, [players, currentPlayerId]);
 
   // Calculate voting states for UI
   const { hasVoted } = getVoteProgress();
   const currentPlayerVoted =
     hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
   const hasActiveStory = !!getCurrentStory();
+  
+  // Debug logging for card selection
+  useEffect(() => {
+    console.log('🎯 Card Selection Debug:', {
+      currentPlayerId,
+      currentPlayer: currentPlayer ? { id: currentPlayer.id, name: currentPlayer.name } : null,
+      selectedCard,
+      userVotedCard, 
+      hasUserVoted,
+      votedCardRef: votedCardRef.current,
+      hasVotedRef: hasVotedRef.current,
+      votingVotes: voting.votes,
+      hasVotedCheck: hasVoted,
+      currentPlayerVoted,
+    });
+  }, [currentPlayerId, currentPlayer, selectedCard, userVotedCard, hasUserVoted, voting.votes, hasVoted, currentPlayerVoted]);
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -131,9 +155,13 @@ export default function App() {
 
       // Set card values from session config
       if (session.config?.cardValues && session.config.cardValues.length > 0) {
-        const values = session.config.cardValues.map((v: string) =>
-          isNaN(Number(v)) ? v : Number(v)
-        ) as CardValue[];
+        console.log('🃏 Session card values raw:', session.config.cardValues);
+        const values = session.config.cardValues.map((v: string) => {
+          const converted = isNaN(Number(v)) ? v : Number(v);
+          console.log(`Converting "${v}" → ${converted} (${typeof converted})`);
+          return converted;
+        }) as CardValue[];
+        console.log('🃏 Final card values:', values);
         setCardValues(values);
         setIsConfigured(true);
       }
@@ -164,9 +192,14 @@ export default function App() {
   }, [sessionData, sessionId, setCardValues, setIsConfigured, syncState]);
 
   const handleCardSelect = (value: CardValue) => {
-    // Just update selected card state for UI feedback
-    // Actual voting is handled by the Card component's submitVote call
+    console.log('🎯 handleCardSelect called with value:', value);
+    // Update selected card state for immediate UI feedback
     setSelectedCard(value);
+    
+    // Also set as user's voted card (will be confirmed after successful vote submission)
+    setUserVotedCard(value);
+    votedCardRef.current = value; // Set ref immediately
+    console.log('🎯 Set userVotedCard and votedCardRef to:', value);
   };
 
   const handleReveal = () => {
@@ -184,37 +217,32 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    // Get the current player ID from localStorage if available
-    // Use tab-specific key to allow multiple tabs with different players
-    const playerKey = `player_${sessionId}_${tabId}`;
-    const storedPlayerId = localStorage.getItem(playerKey);
-    console.log(
-      "Checking player ID for session:",
-      sessionId,
-      "tab:",
-      tabId,
-      "stored:",
-      storedPlayerId
-    );
-    if (storedPlayerId && sessionId) {
-      console.log("Setting stored player ID:", storedPlayerId);
-      setPlayerId(storedPlayerId);
-    } else if (sessionId) {
-      console.log("No stored player ID, ensuring null for join form");
-      // Ensure playerId is null so join form shows
-      setPlayerId(null);
-    }
-  }, [sessionId, tabId]);
+  // Player ID is now managed by the store's getCurrentPlayerId() method
 
   // Reset selected card when active story changes
   const activeStoryId = getCurrentStory()?.id;
   useEffect(() => {
-    // Reset selected card when story changes (but not on initial load)
-    if (selectedCard !== null) {
+    // Reset all card selection state when story changes
+    setSelectedCard(null);
+    setUserVotedCard(null);
+    setHasUserVoted(false);
+    // Reset refs too
+    votedCardRef.current = null;
+    hasVotedRef.current = false;
+  }, [activeStoryId]); // Only reset when story ID changes, NOT when selectedCard changes
+  
+  // Also reset when cards are revealed or reset
+  useEffect(() => {
+    if (!isRevealing) {
+      // When voting round ends (cards reset), clear the selection
+      setUserVotedCard(null);
+      setHasUserVoted(false);
       setSelectedCard(null);
+      // Reset refs too
+      votedCardRef.current = null;
+      hasVotedRef.current = false;
     }
-  }, [activeStoryId, selectedCard]); // Reset when story ID changes
+  }, [isRevealing]);
 
   // Show recovery screen while restoring session
   if (recovering || isLoadingSession || isSessionLoading) {
@@ -279,7 +307,7 @@ export default function App() {
               <JoinGame
                 sessionId={sessionId}
                 tabId={tabId}
-                onJoin={setPlayerId}
+                onJoin={() => {}} // Player ID is now managed by store
               />
             )}
 
@@ -344,23 +372,39 @@ export default function App() {
                             initial="hidden"
                             animate="show"
                           >
-                            {cardValues.map((value) => (
-                              <motion.div
-                                key={value}
-                                variants={{
-                                  hidden: { opacity: 0, y: 20 },
-                                  show: { opacity: 1, y: 0 },
-                                }}
-                              >
-                                <Card
-                                  value={value}
-                                  isSelected={selectedCard === value}
-                                  isRevealed={isRevealing}
-                                  playerId={playerId || undefined}
-                                  onClick={() => handleCardSelect(value)}
-                                />
-                              </motion.div>
-                            ))}
+                            {cardValues.map((value) => {
+                              // Simple selection logic using both state and refs for immediate feedback
+                              const isSelected = 
+                                selectedCard === value || 
+                                (userVotedCard === value && hasUserVoted) ||
+                                (votedCardRef.current === value && hasVotedRef.current);
+                              
+                              return (
+                                <motion.div
+                                  key={value}
+                                  variants={{
+                                    hidden: { opacity: 0, y: 20 },
+                                    show: { opacity: 1, y: 0 },
+                                  }}
+                                >
+                                  <Card
+                                    value={value}
+                                    isSelected={isSelected}
+                                    isRevealed={isRevealing}
+                                    playerId={currentPlayerId || undefined}
+                                    onClick={() => handleCardSelect(value)}
+                                    onVoteSuccess={() => {
+                                      console.log('✅ Vote success callback called! Setting hasUserVoted to true');
+                                      console.log('✅ Current userVotedCard before setting hasUserVoted:', userVotedCard);
+                                      console.log('✅ Current votedCardRef:', votedCardRef.current);
+                                      setHasUserVoted(true);
+                                      hasVotedRef.current = true; // Set ref immediately
+                                      console.log('✅ hasUserVoted should now be true, refs set');
+                                    }}
+                                  />
+                                </motion.div>
+                              );
+                            })}
                           </motion.div>
                         </motion.div>
                       )}
@@ -393,7 +437,7 @@ export default function App() {
                       isVotingActive={hasActiveStory && !isRevealing}
                     />
                     <HostControls
-                      currentPlayerId={playerId || undefined}
+                      currentPlayerId={currentPlayerId || undefined}
                       isHost={isCurrentUserHost()}
                     />
                     <VotingErrorBoundary>
