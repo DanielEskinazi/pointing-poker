@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote, TimerState, TimerConfiguration, VotingHistoryData } from './types';
+import type { CardValue, GameState, Player, Story, CreateStoryDto, UpdateStoryDto, VotingFlowState, ConsensusData, Vote, TimerConfiguration, VotingHistoryData } from './types';
 import type { 
   ConnectionStatus, 
   PlayerJoinedData, 
@@ -10,7 +10,8 @@ import type {
   StoryUpdatedData,
   StoryInfo,
   TimerUpdatedData,
-  SessionStateData
+  SessionStateData,
+  TimerState
 } from './types/websocket';
 import { persist, clearPersistedState } from './store/middleware/persistence';
 import { votingApi } from './services/api/voting';
@@ -45,7 +46,7 @@ interface GameStore extends GameState {
   
   // Enhanced timer management
   configureTimer: (config: TimerConfiguration) => void;
-  startTimer: () => void;
+  startTimer: (duration: number, mode?: 'countdown' | 'stopwatch') => void;
   pauseTimer: () => void;
   resumeTimer: () => void;
   stopTimer: () => void;
@@ -111,16 +112,17 @@ interface GameStore extends GameState {
 const initialTimerState: TimerState = {
   mode: 'countdown',
   duration: 300, // 5 minutes default
-  remaining: 300,
+  remainingTime: 300,
   isRunning: false,
   isPaused: false,
-  startedAt: null,
-  pausedAt: null,
+  startedAt: undefined,
+  pausedAt: undefined,
+  pausedDuration: 0,
   settings: {
-    autoReveal: false,
-    autoSkip: false,
-    audioEnabled: true,
-    warningAt: [60, 30, 10] // Warning at 1 min, 30s, 10s
+    enableWarning: true,
+    warningThreshold: 60, // 1 minute warning
+    enableSound: true,
+    autoReveal: false
   }
 };
 
@@ -143,65 +145,7 @@ const initialState: GameState = {
   },
 };
 
-// Timer update interval manager
-let timerInterval: NodeJS.Timeout | null = null;
-
-const startTimerInterval = (store: { getState: () => any; setState: (update: any) => void }) => {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-  }
-  
-  timerInterval = setInterval(() => {
-    const state = store.getState();
-    const { timerState } = state;
-    
-    if (!timerState.isRunning || timerState.isPaused || timerState.mode === 'none') {
-      return;
-    }
-    
-    if (timerState.startedAt) {
-      const now = Date.now();
-      const elapsed = (now - timerState.startedAt) / 1000;
-      
-      let newRemaining = timerState.remaining;
-      
-      if (timerState.mode === 'countdown') {
-        newRemaining = Math.max(0, timerState.duration - elapsed);
-        
-        // Auto-stop when countdown reaches zero
-        if (newRemaining === 0) {
-          store.setState({
-            timerState: {
-              ...timerState,
-              isRunning: false,
-              remaining: 0
-            }
-          });
-          return;
-        }
-      } else if (timerState.mode === 'stopwatch') {
-        newRemaining = elapsed;
-      }
-      
-      // Update remaining time
-      if (Math.abs(newRemaining - timerState.remaining) >= 0.5) { // Update every 500ms for smooth display
-        store.setState({
-          timerState: {
-            ...timerState,
-            remaining: newRemaining
-          }
-        });
-      }
-    }
-  }, 100); // Update every 100ms for smooth display
-};
-
-const stopTimerInterval = () => {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-};
+// Timer is now managed server-side, no client-side intervals needed
 
 export const useGameStore = create<GameStore>()(
   persist(
@@ -303,151 +247,45 @@ export const useGameStore = create<GameStore>()(
     }
   },
 
-  startTimer: () => {
-    const state = get();
-    if (state.timerState.mode === 'none') return;
-    
-    const now = Date.now();
-    let remaining = state.timerState.remaining;
-    
-    // If starting from paused state, maintain current remaining time but reset start time
-    if (state.timerState.isPaused) {
-      // Keep current remaining time, just reset timing
-      remaining = state.timerState.remaining;
-    } else if (!state.timerState.isRunning) {
-      // Starting fresh - use duration for countdown, 0 for stopwatch
-      remaining = state.timerState.mode === 'countdown' ? state.timerState.duration : 0;
-    }
-    
-    set(state => ({
-      timerState: {
-        ...state.timerState,
-        isRunning: true,
-        isPaused: false,
-        startedAt: now,
-        pausedAt: null,
-        remaining
-      },
-      lastSync: new Date()
-    }));
-
-    // Start the timer interval
-    startTimerInterval({ getState: get, setState: set });
-
-    // Sync with WebSocket
-    const { sessionId } = get();
-    if (sessionId && wsClient.isWsConnected()) {
-      wsClient.startTimer({ ...get().timerState, startedAt: now });
+  startTimer: (duration: number, mode?: 'countdown' | 'stopwatch') => {
+    // Delegate to WebSocket client - server will manage timer state
+    if (wsClient.isWsConnected()) {
+      wsClient.startTimer(duration, mode || 'countdown');
     }
   },
 
   pauseTimer: () => {
-    const state = get();
-    if (!state.timerState.isRunning || state.timerState.isPaused) return;
-    
-    const now = Date.now();
-    
-    // Calculate current remaining time before pausing
-    let remaining = state.timerState.remaining;
-    if (state.timerState.startedAt) {
-      const elapsed = (now - state.timerState.startedAt) / 1000;
-      if (state.timerState.mode === 'countdown') {
-        remaining = Math.max(0, state.timerState.duration - elapsed);
-      } else {
-        remaining = elapsed;
-      }
-    }
-    
-    set(state => ({
-      timerState: {
-        ...state.timerState,
-        isRunning: false,
-        isPaused: true,
-        pausedAt: now,
-        remaining
-      },
-      lastSync: new Date()
-    }));
-
-    // Stop the timer interval
-    stopTimerInterval();
-
-    // Sync with WebSocket
-    const { sessionId } = get();
-    if (sessionId && wsClient.isWsConnected()) {
+    // Delegate to WebSocket client - server will manage timer state
+    if (wsClient.isWsConnected()) {
       wsClient.pauseTimer();
     }
   },
 
   resumeTimer: () => {
-    get().startTimer(); // Resume is essentially starting from current state
+    // Delegate to WebSocket client - server will manage timer state
+    if (wsClient.isWsConnected()) {
+      wsClient.resumeTimer();
+    }
   },
 
   stopTimer: () => {
-    set(state => ({
-      timerState: {
-        ...state.timerState,
-        isRunning: false,
-        isPaused: false,
-        startedAt: null,
-        pausedAt: null,
-        remaining: state.timerState.mode === 'countdown' ? state.timerState.duration : 0
-      },
-      lastSync: new Date()
-    }));
-
-    // Stop the timer interval
-    stopTimerInterval();
-
-    // Sync with WebSocket
-    const { sessionId } = get();
-    if (sessionId && wsClient.isWsConnected()) {
+    // Delegate to WebSocket client - server will manage timer state
+    if (wsClient.isWsConnected()) {
       wsClient.stopTimer();
     }
   },
 
   resetTimer: () => {
-    set(state => ({
-      timerState: {
-        ...state.timerState,
-        isRunning: false,
-        isPaused: false,
-        startedAt: null,
-        pausedAt: null,
-        remaining: state.timerState.mode === 'countdown' ? state.timerState.duration : 0
-      },
-      lastSync: new Date()
-    }));
-
-    // Stop the timer interval
-    stopTimerInterval();
-
-    // Sync with WebSocket
-    const { sessionId } = get();
-    if (sessionId && wsClient.isWsConnected()) {
+    // Delegate to WebSocket client - server will manage timer state
+    if (wsClient.isWsConnected()) {
       wsClient.resetTimer();
     }
   },
 
   addTime: (seconds: number) => {
-    set(state => {
-      const newDuration = state.timerState.duration + seconds;
-      const newRemaining = state.timerState.remaining + seconds;
-      
-      return {
-        timerState: {
-          ...state.timerState,
-          duration: newDuration,
-          remaining: Math.max(0, newRemaining)
-        },
-        lastSync: new Date()
-      };
-    });
-
-    // Sync with WebSocket
-    const { sessionId } = get();
-    if (sessionId && wsClient.isWsConnected()) {
-      wsClient.updateTimer({ addTime: seconds });
+    // Delegate to WebSocket client - server will manage timer state
+    if (wsClient.isWsConnected()) {
+      wsClient.addTime(seconds);
     }
   },
 
@@ -469,8 +307,8 @@ export const useGameStore = create<GameStore>()(
       return { minutes: 0, seconds: 0, isWarning: false, warningLevel: 'none' as const };
     }
     
-    // Use the current remaining time from state (updated by interval)
-    const displayTime = timerState.remaining;
+    // Use the current remaining time from state (updated by server)
+    const displayTime = timerState.remainingTime;
     
     const minutes = Math.floor(displayTime / 60);
     const seconds = Math.floor(displayTime % 60);
@@ -1233,8 +1071,23 @@ export const useGameStore = create<GameStore>()(
   },
 
   handleTimerUpdated: (data: TimerUpdatedData) => {
+    // Update timer state with server-authoritative data
+    const newTimerState = {
+      mode: data.timer.mode,
+      isRunning: data.timer.isRunning,
+      isPaused: data.timer.isPaused,
+      duration: data.timer.duration,
+      remainingTime: data.timer.remainingTime,
+      pausedDuration: data.timer.pausedDuration,
+      // Convert string dates back to numbers if needed
+      startedAt: data.timer.startedAt ? (typeof data.timer.startedAt === 'string' ? new Date(data.timer.startedAt).getTime() : data.timer.startedAt) : undefined,
+      pausedAt: data.timer.pausedAt ? (typeof data.timer.pausedAt === 'string' ? new Date(data.timer.pausedAt).getTime() : data.timer.pausedAt) : undefined,
+      settings: data.timer.settings
+    };
+
     set({
-      timer: data.timer.remainingTime,
+      timerState: newTimerState,
+      timer: data.timer.remainingTime, // Keep backward compatibility
       lastSync: new Date()
     });
   },

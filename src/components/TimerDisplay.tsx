@@ -36,9 +36,9 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
 
   const getProgressPercentage = () => {
     if (timerState.mode === 'stopwatch') {
-      return Math.min((timerState.remaining / timerState.duration) * 100, 100);
+      return Math.min((timerState.remainingTime / timerState.duration) * 100, 100);
     }
-    return (timerState.remaining / timerState.duration) * 100;
+    return (timerState.remainingTime / timerState.duration) * 100;
   };
 
   const getTimerColor = () => {
@@ -137,7 +137,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
           <div className="flex justify-center gap-2">
             {!timerState.isRunning ? (
               <button
-                onClick={timerState.isPaused ? resumeTimer : startTimer}
+                onClick={timerState.isPaused ? resumeTimer : () => startTimer(timerState.duration, timerState.mode)}
                 className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm"
               >
                 <HiPlay size={14} />
@@ -203,7 +203,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
       )}
 
       {/* Auto-reveal warning */}
-      {timerState.settings.autoReveal && timerState.mode === 'countdown' && timerState.remaining <= 10 && timerState.isRunning && (
+      {timerState.settings.autoReveal && timerState.mode === 'countdown' && timerState.remainingTime <= 10 && timerState.isRunning && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

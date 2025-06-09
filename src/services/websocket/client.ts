@@ -392,23 +392,23 @@ export class WebSocketClient {
   }
 
   // Timer management methods
-  configureTimer(config: TimerConfiguration) {
-    this.emit(ClientEvents.TIMER_START, { 
-      duration: config.duration,
-      mode: config.mode,
-      settings: config.settings
-    });
+  configureTimer(settings: TimerState['settings']) {
+    this.emit(ClientEvents.TIMER_CONFIGURE, { settings });
   }
 
-  startTimer(timerState: Partial<TimerState>) {
+  startTimer(duration: number, mode?: 'countdown' | 'stopwatch') {
     this.emit(ClientEvents.TIMER_START, { 
-      duration: timerState.duration || 300,
-      startedAt: timerState.startedAt || Date.now()
+      duration,
+      mode: mode || 'countdown'
     });
   }
 
   pauseTimer() {
-    this.emit(ClientEvents.TIMER_STOP, {});
+    this.emit(ClientEvents.TIMER_PAUSE, {});
+  }
+
+  resumeTimer() {
+    this.emit(ClientEvents.TIMER_RESUME, {});
   }
 
   stopTimer() {
@@ -416,17 +416,11 @@ export class WebSocketClient {
   }
 
   resetTimer() {
-    this.emit(ClientEvents.TIMER_STOP, {});
+    this.emit(ClientEvents.TIMER_RESET, {});
   }
 
-  updateTimer(data: { addTime?: number }) {
-    // For now, we'll use timer start with updated duration
-    if (data.addTime) {
-      const currentState = useGameStore.getState().timerState;
-      this.emit(ClientEvents.TIMER_START, { 
-        duration: currentState.duration + data.addTime 
-      });
-    }
+  addTime(seconds: number) {
+    this.emit(ClientEvents.TIMER_ADD_TIME, { seconds });
   }
 
   // Game management methods

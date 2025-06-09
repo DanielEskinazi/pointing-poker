@@ -31,6 +31,11 @@ export enum ClientEvents {
   STORY_ACTIVATE = 'story:activate',
   TIMER_START = 'timer:start',
   TIMER_STOP = 'timer:stop',
+  TIMER_PAUSE = 'timer:pause',
+  TIMER_RESUME = 'timer:resume',
+  TIMER_RESET = 'timer:reset',
+  TIMER_ADD_TIME = 'timer:add_time',
+  TIMER_CONFIGURE = 'timer:configure',
   HEARTBEAT = 'heartbeat'
 }
 
@@ -94,10 +99,20 @@ export interface StoryInfo {
 }
 
 export interface TimerState {
+  mode: 'countdown' | 'stopwatch' | 'none';
   isRunning: boolean;
+  isPaused: boolean;
   duration: number;
   remainingTime: number;
   startedAt?: Date;
+  pausedAt?: Date;
+  pausedDuration: number;
+  settings: {
+    enableWarning: boolean;
+    warningThreshold: number;
+    enableSound: boolean;
+    autoReveal: boolean;
+  };
 }
 
 // Legacy interfaces for backward compatibility
@@ -197,8 +212,23 @@ export interface ClientEventPayloads {
   };
   [ClientEvents.TIMER_START]: {
     duration: number;
+    mode?: 'countdown' | 'stopwatch';
   };
   [ClientEvents.TIMER_STOP]: Record<string, never>;
+  [ClientEvents.TIMER_PAUSE]: Record<string, never>;
+  [ClientEvents.TIMER_RESUME]: Record<string, never>;
+  [ClientEvents.TIMER_RESET]: Record<string, never>;
+  [ClientEvents.TIMER_ADD_TIME]: {
+    seconds: number;
+  };
+  [ClientEvents.TIMER_CONFIGURE]: {
+    settings: {
+      enableWarning: boolean;
+      warningThreshold: number;
+      enableSound: boolean;
+      autoReveal: boolean;
+    };
+  };
   [ClientEvents.PLAYER_REMOVE]: {
     playerId: string;
   };

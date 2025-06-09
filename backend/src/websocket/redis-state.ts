@@ -22,6 +22,10 @@ export class RedisStateManager {
     this.redis = redis;
   }
 
+  getRedis(): Redis {
+    return this.redis;
+  }
+
   // Connection management
   async storeConnection(connection: SocketConnection): Promise<void> {
     try {
