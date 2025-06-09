@@ -67,9 +67,22 @@ class ErrorReportingService {
   private async flush() {
     if (this.errors.length === 0) return;
 
+    // For now, just log errors to console instead of sending to server
+    // TODO: Implement /api/errors endpoint in backend
     const errorsToSend = [...this.errors];
     this.errors = [];
 
+    // Just log to console for development
+    if (process.env.NODE_ENV === 'development') {
+      console.group('📊 Client Error Report');
+      errorsToSend.forEach(error => {
+        console[error.level](error.message, error);
+      });
+      console.groupEnd();
+    }
+
+    // Commented out server sending until endpoint is implemented
+    /*
     try {
       const response = await fetch(this.endpoint, {
         method: 'POST',
@@ -89,6 +102,7 @@ class ErrorReportingService {
       // Put errors back in queue if send failed
       this.errors.unshift(...errorsToSend);
     }
+    */
   }
 
   destroy() {
@@ -126,8 +140,12 @@ export const setupGlobalErrorHandlers = () => {
     try {
       const response = await originalFetch(...args);
       
-      // Log failed HTTP requests
-      if (!response.ok) {
+      // Don't log errors for the error reporting endpoint to prevent infinite loops
+      const url = args[0]?.toString() || '';
+      const isErrorEndpoint = url.includes('/api/errors');
+      
+      // Log failed HTTP requests (except for error reporting endpoint)
+      if (!response.ok && !isErrorEndpoint) {
         errorReporting.logError(
           `HTTP ${response.status}: ${response.statusText} - ${args[0]}`,
           response.status >= 500 ? 'error' : 'warn'
@@ -136,10 +154,16 @@ export const setupGlobalErrorHandlers = () => {
       
       return response;
     } catch (error) {
-      errorReporting.logError(
-        `Network Error: ${error instanceof Error ? error.message : 'Unknown error'} - ${args[0]}`,
-        'error'
-      );
+      // Don't log network errors for the error reporting endpoint to prevent infinite loops
+      const url = args[0]?.toString() || '';
+      const isErrorEndpoint = url.includes('/api/errors');
+      
+      if (!isErrorEndpoint) {
+        errorReporting.logError(
+          `Network Error: ${error instanceof Error ? error.message : 'Unknown error'} - ${args[0]}`,
+          'error'
+        );
+      }
       throw error;
     }
   };

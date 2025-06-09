@@ -24,6 +24,7 @@ export enum ClientEvents {
   TIMER_RESUME = 'timer:resume',
   TIMER_RESET = 'timer:reset',
   TIMER_ADD_TIME = 'timer:add_time',
+  TIMER_ADJUST = 'timer:adjust',
   TIMER_CONFIGURE = 'timer:configure',
   
   // System
@@ -203,6 +204,10 @@ export interface ClientEventPayloads {
   
   [ClientEvents.TIMER_ADD_TIME]: {
     seconds: number;
+  };
+
+  [ClientEvents.TIMER_ADJUST]: {
+    adjustmentSeconds: number;
   };
   
   [ClientEvents.TIMER_CONFIGURE]: {

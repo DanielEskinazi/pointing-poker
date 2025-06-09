@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { HiClock as TimerIcon, HiPause, HiPlay, HiStop, HiPlus, HiArrowUturnLeft, HiCog6Tooth } from 'react-icons/hi2';
+import { HiClock as TimerIcon, HiPause, HiPlay, HiStop, HiPlus, HiMinus, HiArrowUturnLeft, HiCog6Tooth } from 'react-icons/hi2';
 import { useGameStore } from '../store';
 
 interface TimerDisplayProps {
@@ -16,6 +16,7 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
     stopTimer, 
     resetTimer, 
     addTime,
+    adjustTimer,
     getTimerDisplay 
   } = useGameStore();
 
@@ -26,9 +27,6 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
     return null;
   }
 
-  const handleAddTime = (secondsToAdd: number) => {
-    addTime(secondsToAdd);
-  };
 
   const formatTime = (mins: number, secs: number) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -135,21 +133,29 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
         <div className="space-y-3">
           {/* Main Controls */}
           <div className="flex justify-center gap-2">
-            {!timerState.isRunning ? (
-              <button
-                onClick={timerState.isPaused ? resumeTimer : () => startTimer(timerState.duration, timerState.mode)}
-                className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm"
-              >
-                <HiPlay size={14} />
-                {timerState.isPaused ? 'Resume' : 'Start'}
-              </button>
-            ) : (
+            {timerState.isRunning && !timerState.isPaused ? (
               <button
                 onClick={pauseTimer}
                 className="flex items-center gap-1 px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors text-sm"
               >
                 <HiPause size={14} />
                 Pause
+              </button>
+            ) : timerState.isPaused ? (
+              <button
+                onClick={resumeTimer}
+                className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm"
+              >
+                <HiPlay size={14} />
+                Resume
+              </button>
+            ) : (
+              <button
+                onClick={() => startTimer(timerState.duration, timerState.mode)}
+                className="flex items-center gap-1 px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
+              >
+                <HiPlay size={14} />
+                Start
               </button>
             )}
             
@@ -170,33 +176,63 @@ export const TimerDisplay = ({ onConfigure }: TimerDisplayProps) => {
             </button>
           </div>
 
-          {/* Add Time Controls (only for countdown) */}
+          {/* Time Adjustment Controls (only for countdown) */}
           {timerState.mode === 'countdown' && (
-            <div className="flex justify-center gap-1">
-              <button
-                onClick={() => handleAddTime(30)}
-                className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                title="Add 30 seconds"
-              >
-                <HiPlus size={12} />
-                30s
-              </button>
-              <button
-                onClick={() => handleAddTime(60)}
-                className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                title="Add 1 minute"
-              >
-                <HiPlus size={12} />
-                1m
-              </button>
-              <button
-                onClick={() => handleAddTime(300)}
-                className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                title="Add 5 minutes"
-              >
-                <HiPlus size={12} />
-                5m
-              </button>
+            <div className="space-y-2">
+              <div className="text-center">
+                <span className="text-xs text-gray-600">Adjust time</span>
+              </div>
+              <div className="flex justify-center gap-2">
+                {/* Reduction buttons */}
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => adjustTimer(-30)}
+                    disabled={timerState.remainingTime <= 10}
+                    className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                    title="Remove 30 seconds"
+                  >
+                    <HiMinus size={12} />
+                    30s
+                  </button>
+                  <button
+                    onClick={() => adjustTimer(-60)}
+                    disabled={timerState.remainingTime <= 10}
+                    className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                    title="Remove 1 minute"
+                  >
+                    <HiMinus size={12} />
+                    1m
+                  </button>
+                </div>
+                
+                {/* Addition buttons */}
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => adjustTimer(30)}
+                    className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
+                    title="Add 30 seconds"
+                  >
+                    <HiPlus size={12} />
+                    30s
+                  </button>
+                  <button
+                    onClick={() => adjustTimer(60)}
+                    className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
+                    title="Add 1 minute"
+                  >
+                    <HiPlus size={12} />
+                    1m
+                  </button>
+                  <button
+                    onClick={() => adjustTimer(300)}
+                    className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
+                    title="Add 5 minutes"
+                  >
+                    <HiPlus size={12} />
+                    5m
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

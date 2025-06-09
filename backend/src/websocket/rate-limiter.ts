@@ -20,6 +20,7 @@ export class WebSocketRateLimiter {
     [ClientEvents.GAME_RESET]: { points: 5, duration: 60 },
     [ClientEvents.TIMER_START]: { points: 10, duration: 60 },
     [ClientEvents.TIMER_STOP]: { points: 10, duration: 60 },
+    [ClientEvents.TIMER_ADJUST]: { points: 100, duration: 60 },
     [ClientEvents.SESSION_JOIN]: { points: 3, duration: 60 },
     [ClientEvents.HEARTBEAT]: { points: 120, duration: 60 },
     default: { points: 30, duration: 60 }

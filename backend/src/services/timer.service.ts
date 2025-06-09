@@ -201,6 +201,38 @@ export class TimerService extends EventEmitter {
   }
 
   /**
+   * Adjust timer by adding or subtracting time
+   */
+  async adjustTimer(sessionId: string, adjustmentSeconds: number): Promise<TimerState | null> {
+    const timerState = this.sessionTimers.get(sessionId);
+    if (!timerState || !timerState.isRunning) {
+      return null;
+    }
+
+    const newTimeRemaining = Math.max(10, timerState.remainingTime + adjustmentSeconds);
+    timerState.remainingTime = newTimeRemaining;
+
+    // Adjust duration if extending beyond original
+    if (newTimeRemaining > timerState.duration) {
+      timerState.duration = newTimeRemaining;
+    }
+
+    // Update state
+    this.sessionTimers.set(sessionId, timerState);
+    await this.persistTimerState(sessionId, timerState);
+
+    logger.info('Timer adjusted', { 
+      sessionId, 
+      adjustmentSeconds, 
+      newTimeRemaining: timerState.remainingTime,
+      newDuration: timerState.duration 
+    });
+
+    this.emit('timer:updated', { sessionId, timer: timerState });
+    return timerState;
+  }
+
+  /**
    * Configure timer settings
    */
   async configureTimer(sessionId: string, settings: TimerState['settings']): Promise<TimerState | null> {
@@ -246,6 +278,9 @@ export class TimerService extends EventEmitter {
         }
 
         this.sessionTimers.set(sessionId, timerState);
+
+        // Update session state cache with loaded timer state
+        await this.redisState.updateSessionState(sessionId, { timer: timerState });
 
         // If timer was running, restart the interval
         if (timerState.isRunning && !timerState.isPaused) {
@@ -328,8 +363,12 @@ export class TimerService extends EventEmitter {
    */
   private async persistTimerState(sessionId: string, timerState: TimerState): Promise<void> {
     try {
+      // Store timer state in dedicated key
       const redisKey = `timer:${sessionId}`;
       await this.redisState.getRedis().setex(redisKey, 86400, JSON.stringify(timerState)); // 24 hour expiry
+      
+      // Update session state cache so new players get correct timer state
+      await this.redisState.updateSessionState(sessionId, { timer: timerState });
     } catch (error) {
       logger.error('Failed to persist timer state', { sessionId, error });
     }

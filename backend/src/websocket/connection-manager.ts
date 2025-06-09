@@ -302,6 +302,10 @@ export class ConnectionManager {
       await this.handleTimerAddTime(socket, io, connection, data);
     });
 
+    socket.on(ClientEvents.TIMER_ADJUST, async (data: ClientEventPayloads[ClientEvents.TIMER_ADJUST]) => {
+      await this.handleTimerAdjust(socket, io, connection, data);
+    });
+
     socket.on(ClientEvents.TIMER_CONFIGURE, async (data: ClientEventPayloads[ClientEvents.TIMER_CONFIGURE]) => {
       await this.handleTimerConfigure(socket, io, connection, data);
     });
@@ -954,11 +958,17 @@ export class ConnectionManager {
     const currentStory = stories.find(s => s.isActive);
     const cachedState = await this.redisState.getSessionState(sessionId);
 
+    // Ensure timer state is loaded and cached
+    let timerState = cachedState?.timer;
+    if (!timerState) {
+      timerState = await this.timerService.loadTimerState(sessionId) || undefined;
+    }
+
     return {
       players: players.map(p => this.mapPlayerToInfo(p, session?.hostId)),
       stories: stories.map(s => this.mapStoryToInfo(s)),
       currentStory: currentStory ? this.mapStoryToInfo(currentStory) : undefined,
-      timer: cachedState?.timer,
+      timer: timerState,
       votesRevealed: cachedState?.votesRevealed || false
     };
   }
@@ -1149,6 +1159,57 @@ export class ConnectionManager {
     } catch (error) {
       logger.error('Timer add time error:', error);
       socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to add time to timer' });
+    }
+  }
+
+  private async handleTimerAdjust(
+    socket: Socket, 
+    io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.TIMER_ADJUST]
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (!session || session.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only the host can adjust the timer' });
+        return;
+      }
+
+      // Rate limiting check
+      const rateLimitResult = await this.rateLimiter.check(connection.socketId, ClientEvents.TIMER_ADJUST);
+      if (!rateLimitResult.allowed) {
+        socket.emit(ServerEvents.RATE_LIMIT_EXCEEDED, { 
+          event: 'timer:adjust', 
+          retryAfter: rateLimitResult.retryAfter || 10 
+        });
+        return;
+      }
+
+      // Adjust timer
+      const updatedTimer = await this.timerService.adjustTimer(connection.sessionId, data.adjustmentSeconds);
+      
+      if (updatedTimer) {
+        // Broadcast to all session members
+        io.to(`session:${connection.sessionId}`).emit(ServerEvents.TIMER_UPDATED, {
+          timer: updatedTimer
+        });
+
+        logger.info('Timer adjusted', { 
+          sessionId: connection.sessionId,
+          playerId: connection.playerId,
+          adjustmentSeconds: data.adjustmentSeconds,
+          newTimeRemaining: updatedTimer.remainingTime
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer adjust error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to adjust timer' });
     }
   }
 
