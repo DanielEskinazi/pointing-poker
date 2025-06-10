@@ -72,9 +72,39 @@ export class PersistenceManager {
       
       if (!encrypted) return null;
       
-      const compressed = await decrypt(encrypted, this.getEncryptionKey());
+      // Try to decrypt the data
+      let compressed: string;
+      try {
+        compressed = await decrypt(encrypted, this.getEncryptionKey());
+      } catch (decryptError) {
+        console.warn('Failed to decrypt persisted state, clearing corrupt data:', decryptError);
+        this.clear();
+        return null;
+      }
+      
+      // Try to decompress the data
       const json = decompress(compressed);
-      const data = JSON.parse(json) as PersistedState;
+      if (!json) {
+        console.warn('Failed to decompress persisted state, clearing corrupt data');
+        this.clear();
+        return null;
+      }
+      
+      // Try to parse the JSON
+      let data: PersistedState;
+      try {
+        data = JSON.parse(json) as PersistedState;
+      } catch (parseError) {
+        console.warn('Failed to parse persisted state JSON, clearing corrupt data:', parseError);
+        this.clear();
+        return null;
+      }
+      
+      if (!data || typeof data !== 'object' || !data.timestamp) {
+        console.warn('Invalid persisted state structure, clearing corrupt data:', data);
+        this.clear();
+        return null;
+      }
       
       if (Date.now() - data.timestamp > this.MAX_AGE) {
         this.clear();
@@ -84,7 +114,7 @@ export class PersistenceManager {
       return this.migrate(data);
       
     } catch (error) {
-      console.error('Failed to load persisted state:', error);
+      console.error('Unexpected error loading persisted state, clearing all data:', error);
       this.clear();
       return null;
     }

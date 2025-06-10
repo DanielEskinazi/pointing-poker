@@ -10,11 +10,12 @@ interface CardProps {
   isSelected?: boolean;
   isRevealed?: boolean;
   onClick?: () => void;
+  onVoteSuccess?: () => void;
   playerId?: string;
   disabled?: boolean;
 }
 
-export function Card({ value, isSelected, isRevealed, onClick, playerId, disabled }: CardProps) {
+export function Card({ value, isSelected, isRevealed, onClick, onVoteSuccess, playerId, disabled }: CardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitVote, voting, getCurrentStory, stories } = useGameStore();
   const { showToast } = useToast();
@@ -88,6 +89,7 @@ export function Card({ value, isSelected, isRevealed, onClick, playerId, disable
       await submitVote(playerId, value);
       showToast('Vote submitted!', 'success');
       onClick?.();
+      onVoteSuccess?.(); // Call the success callback
     } catch (error) {
       console.error('Error submitting vote:', error);
       

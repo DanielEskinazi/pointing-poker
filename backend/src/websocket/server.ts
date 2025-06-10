@@ -9,6 +9,7 @@ import { RedisStateManager } from './redis-state';
 import { WebSocketRateLimiter } from './rate-limiter';
 import { VotingService } from '../services/voting.service';
 import { StoryService } from '../services/story.service';
+import { TimerService } from '../services/timer.service';
 import { 
   ClientEvents, 
   ServerEvents, 
@@ -24,6 +25,7 @@ export class WebSocketServer {
   private rateLimiter: WebSocketRateLimiter;
   private votingService: VotingService;
   private storyService: StoryService;
+  private timerService: TimerService;
   private isInitialized = false;
 
   constructor() {
@@ -31,6 +33,7 @@ export class WebSocketServer {
     this.rateLimiter = new WebSocketRateLimiter(db.getRedis());
     this.votingService = new VotingService();
     this.storyService = StoryService.getInstance();
+    this.timerService = TimerService.getInstance(this.redisStateManager);
     this.connectionManager = new ConnectionManager(
       this.redisStateManager, 
       this.rateLimiter
@@ -325,6 +328,51 @@ export class WebSocketServer {
       });
     });
 
+    // Listen to timer service events and broadcast to WebSocket clients
+    this.timerService.on('timer:updated', (data: { sessionId: string; timer: any }) => {
+      this.emitToSession(data.sessionId, ServerEvents.TIMER_UPDATED, {
+        timer: data.timer
+      });
+    });
+
+    this.timerService.on('timer:completed', (data: { sessionId: string; timer: any }) => {
+      // When timer completes, emit update and optionally auto-reveal cards
+      this.emitToSession(data.sessionId, ServerEvents.TIMER_UPDATED, {
+        timer: data.timer
+      });
+
+      // If auto-reveal is enabled, reveal cards automatically
+      if (data.timer.settings?.autoReveal) {
+        // Get current story and reveal votes if there are any
+        this.getCurrentStory(data.sessionId).then(story => {
+          if (story) {
+            // Trigger card reveal logic similar to handleCardsReveal
+            db.getPrisma().vote.findMany({
+              where: { storyId: story.id },
+              include: { player: true }
+            }).then(votes => {
+              if (votes.length > 0) {
+                const voteResults = votes.map(vote => ({
+                  playerId: vote.playerId,
+                  playerName: vote.player.name,
+                  value: vote.value,
+                  confidence: vote.confidence || undefined
+                }));
+
+                const consensus = this.calculateConsensus(voteResults);
+
+                this.emitToSession(data.sessionId, ServerEvents.CARDS_REVEALED, {
+                  storyId: story.id,
+                  votes: voteResults,
+                  consensus
+                });
+              }
+            }).catch(error => logger.error('Failed to auto-reveal cards:', error));
+          }
+        }).catch(error => logger.error('Failed to get current story for auto-reveal:', error));
+      }
+    });
+
     logger.info('Service event listeners set up successfully');
   }
 
@@ -464,5 +512,42 @@ export class WebSocketServer {
         orderIndex: 'desc'
       }
     });
+  }
+
+  private calculateConsensus(votes: { value: string }[]): { hasConsensus: boolean; suggestedValue?: string; averageValue?: number; deviation?: number } {
+    if (votes.length === 0) {
+      return { hasConsensus: false };
+    }
+
+    const values = votes.map(vote => vote.value);
+    const uniqueValues = [...new Set(values)];
+
+    // If all votes are the same, we have consensus
+    if (uniqueValues.length === 1) {
+      return {
+        hasConsensus: true,
+        suggestedValue: uniqueValues[0]
+      };
+    }
+
+    // For numeric values, calculate average and deviation
+    const numericValues = values
+      .map(v => parseFloat(v))
+      .filter(v => !isNaN(v));
+
+    if (numericValues.length > 0) {
+      const average = numericValues.reduce((a, b) => a + b, 0) / numericValues.length;
+      const variance = numericValues.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / numericValues.length;
+      const deviation = Math.sqrt(variance);
+
+      return {
+        hasConsensus: deviation < 2, // Low deviation indicates consensus
+        averageValue: average,
+        deviation,
+        suggestedValue: Math.round(average).toString()
+      };
+    }
+
+    return { hasConsensus: false };
   }
 }

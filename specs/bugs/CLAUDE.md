@@ -12,11 +12,31 @@ After creating a bug, don't work on it immediately, ask first if you should solv
 5. **Review related code** - Check if the fix affects other components using similar patterns
 6. **Check Logs** - Ensure the service logs validate the fix, if we are missing logs to check, add them.
 
-## Show Proof of bug fix
+# Bug Fix Requirements - NO EXCEPTIONS
 
-1. **Show logic** - Explain your logic to why this bug fix would work and wouldn't break other things.
-2. **Show Logs** - Show proof with service logs
-3. **Show Screenshots** - If changing frontend code, show screenshots taken with playwright
+## MANDATORY BEFORE CLOSING ANY BUG:
+
+**🚫 STOP - Answer these 3 questions with YES:**
+
+1. Can I show a screenshot of the bug fixed in the ACTUAL APPLICATION?
+2. Did I test the exact scenario from the original bug report?
+3. Did the user confirm "this is working now"?
+
+**If ANY answer is NO, keep working.**
+
+## FORBIDDEN SHORTCUTS:
+
+❌ Test files instead of real app
+❌ "Should work" without showing it working
+❌ Build passes = bug fixed
+❌ Moving to archive without user approval
+
+## REQUIRED PROOF:
+
+- Screenshot of fix working in real application
+- User confirmation: "this works"
+
+**Type "BUG VERIFIED FIXED" only after providing both.**
 
 ## After Bug completion
 

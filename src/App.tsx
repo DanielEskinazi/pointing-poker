@@ -1,8 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { HiShare } from "react-icons/hi2";
 import { Card } from "./components/Card";
-import { PlayerAvatar } from "./components/PlayerAvatar";
 import { Timer } from "./components/Timer";
 import { JoinGame } from "./components/JoinGame";
 import { GameConfig } from "./components/GameConfig";
@@ -17,11 +16,10 @@ import {
 } from "./components/errors";
 import { ToastProvider } from "./components/toast";
 import { StoryList } from "./components/StoryList";
+import { PlayerListSidebar } from "./components/PlayerListSidebar";
 import { StoryCreatorModal } from "./components/StoryCreator";
-import { VotingProgress } from "./components/VotingProgress";
-import { VotingResults } from "./components/VotingResults";
 import { StoryVotingResults } from "./components/StoryVotingResults";
-import { HostControls } from "./components/HostControls";
+import { RevealButton } from "./components/RevealButton";
 import { useGameStore } from "./store";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
@@ -34,6 +32,11 @@ import type { CardValue } from "./types";
 
 export default function App() {
   const [selectedCard, setSelectedCard] = useState<CardValue | null>(null);
+  const [userVotedCard, setUserVotedCard] = useState<CardValue | null>(null);
+  const [hasUserVoted, setHasUserVoted] = useState(false);
+  // Use ref for immediate vote tracking without waiting for state updates
+  const votedCardRef = useRef<CardValue | null>(null);
+  const hasVotedRef = useRef<boolean>(false);
   const {
     players,
     isRevealing,
@@ -46,13 +49,13 @@ export default function App() {
     setCardValues,
     setIsConfigured,
     syncState,
-    isCurrentUserHost,
     getVoteProgress,
     voting,
     stories,
     getCurrentStory,
+    getCurrentPlayerId,
   } = useGameStore();
-  const [playerId, setPlayerId] = useState<string | null>(null);
+  // Use store's getCurrentPlayerId() instead of local state to ensure consistency
   const [timerKey, setTimerKey] = useState(0);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
 
@@ -70,18 +73,22 @@ export default function App() {
   } = useSession(sessionId || "");
 
   // Initialize WebSocket connection with playerId
-  const { connected, emit } = useWebSocket(playerId);
+  const currentPlayerId = getCurrentPlayerId();
+  const { connected, emit } = useWebSocket(currentPlayerId);
 
   // Ensure consistent player identification across tabs and re-renders
   const currentPlayer = useMemo(() => {
-    return playerId ? players.find((p) => p.id === playerId) || null : null;
-  }, [players, playerId]);
+    return currentPlayerId
+      ? players.find((p) => p.id === currentPlayerId) || null
+      : null;
+  }, [players, currentPlayerId]);
 
   // Calculate voting states for UI
   const { hasVoted } = getVoteProgress();
   const currentPlayerVoted =
     hasVoted || (currentPlayer && voting.votes[currentPlayer.id]);
   const hasActiveStory = !!getCurrentStory();
+
   const shareUrl = sessionId
     ? `${window.location.origin}?session=${sessionId}`
     : "";
@@ -126,20 +133,27 @@ export default function App() {
   // Sync session data from API
   useEffect(() => {
     if (sessionData && sessionId) {
-      // sessionData is already the session object (not wrapped in .data)
-      const session = sessionData;
+      if (!sessionData.data) {
+        console.warn('⚠️ Session data received but no data property:', sessionData);
+        return;
+      }
+      
+      // sessionData is wrapped in ApiResponse, access .data
+      const session = sessionData.data;
+      console.log('🔄 Syncing session data:', { sessionId, session });
 
       // Set card values from session config
-      if (session.config?.cardValues && session.config.cardValues.length > 0) {
-        const values = session.config.cardValues.map((v: string) =>
-          isNaN(Number(v)) ? v : Number(v)
-        ) as CardValue[];
+      if (session?.config?.cardValues && session.config.cardValues.length > 0) {
+        const values = session.config.cardValues.map((v: string) => {
+          const converted = isNaN(Number(v)) ? v : Number(v);
+          return converted;
+        }) as CardValue[];
         setCardValues(values);
         setIsConfigured(true);
       }
 
       // Sync players from session
-      if (session.players) {
+      if (session?.players) {
         syncState({
           players: session.players.map(
             (p: {
@@ -152,6 +166,7 @@ export default function App() {
               name: p.name,
               avatar: p.avatar,
               selectedCard: null,
+              isRevealed: false,
               isSpectator: p.isSpectator,
               isHost: session.hostId === p.id,
             })
@@ -164,9 +179,12 @@ export default function App() {
   }, [sessionData, sessionId, setCardValues, setIsConfigured, syncState]);
 
   const handleCardSelect = (value: CardValue) => {
-    // Just update selected card state for UI feedback
-    // Actual voting is handled by the Card component's submitVote call
+    // Update selected card state for immediate UI feedback
     setSelectedCard(value);
+
+    // Also set as user's voted card (will be confirmed after successful vote submission)
+    setUserVotedCard(value);
+    votedCardRef.current = value; // Set ref immediately
   };
 
   const handleReveal = () => {
@@ -184,37 +202,32 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    // Get the current player ID from localStorage if available
-    // Use tab-specific key to allow multiple tabs with different players
-    const playerKey = `player_${sessionId}_${tabId}`;
-    const storedPlayerId = localStorage.getItem(playerKey);
-    console.log(
-      "Checking player ID for session:",
-      sessionId,
-      "tab:",
-      tabId,
-      "stored:",
-      storedPlayerId
-    );
-    if (storedPlayerId && sessionId) {
-      console.log("Setting stored player ID:", storedPlayerId);
-      setPlayerId(storedPlayerId);
-    } else if (sessionId) {
-      console.log("No stored player ID, ensuring null for join form");
-      // Ensure playerId is null so join form shows
-      setPlayerId(null);
-    }
-  }, [sessionId, tabId]);
+  // Player ID is now managed by the store's getCurrentPlayerId() method
 
   // Reset selected card when active story changes
   const activeStoryId = getCurrentStory()?.id;
   useEffect(() => {
-    // Reset selected card when story changes (but not on initial load)
-    if (selectedCard !== null) {
+    // Reset all card selection state when story changes
+    setSelectedCard(null);
+    setUserVotedCard(null);
+    setHasUserVoted(false);
+    // Reset refs too
+    votedCardRef.current = null;
+    hasVotedRef.current = false;
+  }, [activeStoryId]); // Only reset when story ID changes, NOT when selectedCard changes
+
+  // Also reset when cards are revealed or reset
+  useEffect(() => {
+    if (!isRevealing) {
+      // When voting round ends (cards reset), clear the selection
+      setUserVotedCard(null);
+      setHasUserVoted(false);
       setSelectedCard(null);
+      // Reset refs too
+      votedCardRef.current = null;
+      hasVotedRef.current = false;
     }
-  }, [activeStoryId, selectedCard]); // Reset when story ID changes
+  }, [isRevealing]);
 
   // Show recovery screen while restoring session
   if (recovering || isLoadingSession || isSessionLoading) {
@@ -244,9 +257,7 @@ export default function App() {
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-4">
-                <h1 className="page-title text-gray-800">
-                  Planning Poker
-                </h1>
+                <h1 className="page-title text-gray-800">Planning Poker</h1>
                 {sessionId && (
                   <>
                     <button
@@ -279,13 +290,13 @@ export default function App() {
               <JoinGame
                 sessionId={sessionId}
                 tabId={tabId}
-                onJoin={setPlayerId}
+                onJoin={() => {}} // Player ID is now managed by store
               />
             )}
 
             {/* Integrated Story & Estimation Section */}
             {currentPlayer && (
-              <SessionErrorBoundary sessionId={sessionId}>
+              <SessionErrorBoundary sessionId={sessionId || undefined}>
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
                   {/* Main estimation workflow - takes up more space */}
                   <div className="lg:col-span-3">
@@ -296,8 +307,13 @@ export default function App() {
                       {/* Voting Cards - only show when there are stories and story is not completed */}
                       {(() => {
                         const currentStory = getCurrentStory();
-                        const isStoryCompleted = currentStory && (currentStory.votingHistory || currentStory.completedAt);
-                        return hasActiveStory && !isRevealing && !isStoryCompleted;
+                        const isStoryCompleted =
+                          currentStory &&
+                          (currentStory.votingHistory ||
+                            currentStory.completedAt);
+                        return (
+                          hasActiveStory && !isRevealing && !isStoryCompleted
+                        );
                       })() && (
                         <motion.div
                           className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm"
@@ -344,24 +360,40 @@ export default function App() {
                             initial="hidden"
                             animate="show"
                           >
-                            {cardValues.map((value) => (
-                              <motion.div
-                                key={value}
-                                variants={{
-                                  hidden: { opacity: 0, y: 20 },
-                                  show: { opacity: 1, y: 0 },
-                                }}
-                              >
-                                <Card
-                                  value={value}
-                                  isSelected={selectedCard === value}
-                                  isRevealed={isRevealing}
-                                  playerId={playerId || undefined}
-                                  onClick={() => handleCardSelect(value)}
-                                />
-                              </motion.div>
-                            ))}
+                            {cardValues.map((value) => {
+                              // Simple selection logic using both state and refs for immediate feedback
+                              const isSelected =
+                                selectedCard === value ||
+                                (userVotedCard === value && hasUserVoted) ||
+                                (votedCardRef.current === value &&
+                                  hasVotedRef.current);
+
+                              return (
+                                <motion.div
+                                  key={value}
+                                  variants={{
+                                    hidden: { opacity: 0, y: 20 },
+                                    show: { opacity: 1, y: 0 },
+                                  }}
+                                >
+                                  <Card
+                                    value={value}
+                                    isSelected={isSelected}
+                                    isRevealed={isRevealing}
+                                    playerId={currentPlayerId || undefined}
+                                    onClick={() => handleCardSelect(value)}
+                                    onVoteSuccess={() => {
+                                      setHasUserVoted(true);
+                                      hasVotedRef.current = true; // Set ref immediately
+                                    }}
+                                  />
+                                </motion.div>
+                              );
+                            })}
                           </motion.div>
+
+                          {/* Reveal Cards Button - only show for host with votes */}
+                          <RevealButton />
                         </motion.div>
                       )}
 
@@ -369,14 +401,17 @@ export default function App() {
                       {(() => {
                         const currentStory = getCurrentStory();
                         const showCurrentResults = isRevealing && currentStory;
-                        const showHistoricalResults = currentStory && !isRevealing && 
-                          (currentStory.votingHistory || currentStory.completedAt);
-                        
+                        const showHistoricalResults =
+                          currentStory &&
+                          !isRevealing &&
+                          (currentStory.votingHistory ||
+                            currentStory.completedAt);
+
                         if (showCurrentResults || showHistoricalResults) {
                           return (
                             <VotingErrorBoundary>
-                              <StoryVotingResults 
-                                story={currentStory} 
+                              <StoryVotingResults
+                                story={currentStory}
                                 isCurrentlyRevealing={isRevealing}
                               />
                             </VotingErrorBoundary>
@@ -387,18 +422,12 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Side panel for story management and controls */}
+                  {/* Side panel for story management and players */}
                   <div className="space-y-6">
                     <StoryList
                       isVotingActive={hasActiveStory && !isRevealing}
                     />
-                    <HostControls
-                      currentPlayerId={playerId || undefined}
-                      isHost={isCurrentUserHost()}
-                    />
-                    <VotingErrorBoundary>
-                      <VotingProgress />
-                    </VotingErrorBoundary>
+                    <PlayerListSidebar />
                   </div>
                 </div>
               </SessionErrorBoundary>

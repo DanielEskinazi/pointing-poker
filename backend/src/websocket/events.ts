@@ -20,6 +20,12 @@ export enum ClientEvents {
   STORY_ACTIVATE = 'story:activate',
   TIMER_START = 'timer:start',
   TIMER_STOP = 'timer:stop',
+  TIMER_PAUSE = 'timer:pause',
+  TIMER_RESUME = 'timer:resume',
+  TIMER_RESET = 'timer:reset',
+  TIMER_ADD_TIME = 'timer:add_time',
+  TIMER_ADJUST = 'timer:adjust',
+  TIMER_CONFIGURE = 'timer:configure',
   
   // System
   HEARTBEAT = 'heartbeat'
@@ -96,10 +102,20 @@ export interface StoryInfo {
 
 // Timer state interface
 export interface TimerState {
+  mode: 'countdown' | 'stopwatch' | 'none';
   isRunning: boolean;
+  isPaused: boolean;
   duration: number;
   remainingTime: number;
   startedAt?: Date;
+  pausedAt?: Date;
+  pausedDuration: number; // Total time spent paused
+  settings: {
+    enableWarning: boolean;
+    warningThreshold: number;
+    enableSound: boolean;
+    autoReveal: boolean;
+  };
 }
 
 // Type-safe event payloads for client events
@@ -175,9 +191,33 @@ export interface ClientEventPayloads {
   
   [ClientEvents.TIMER_START]: {
     duration: number;
+    mode?: 'countdown' | 'stopwatch';
   };
   
   [ClientEvents.TIMER_STOP]: Record<string, never>;
+  
+  [ClientEvents.TIMER_PAUSE]: Record<string, never>;
+  
+  [ClientEvents.TIMER_RESUME]: Record<string, never>;
+  
+  [ClientEvents.TIMER_RESET]: Record<string, never>;
+  
+  [ClientEvents.TIMER_ADD_TIME]: {
+    seconds: number;
+  };
+
+  [ClientEvents.TIMER_ADJUST]: {
+    adjustmentSeconds: number;
+  };
+  
+  [ClientEvents.TIMER_CONFIGURE]: {
+    settings: {
+      enableWarning: boolean;
+      warningThreshold: number;
+      enableSound: boolean;
+      autoReveal: boolean;
+    };
+  };
   
   [ClientEvents.HEARTBEAT]: {
     timestamp: number;

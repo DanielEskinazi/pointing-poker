@@ -9,7 +9,6 @@ export interface ApiResponse<T = unknown> {
 // Session API Types
 export interface CreateSessionDto {
   name: string;
-  password?: string;
   config: SessionConfig;
   host: {
     name: string;
@@ -20,7 +19,6 @@ export interface CreateSessionDto {
 export interface JoinSessionDto {
   name: string;
   avatar: string;
-  password?: string;
   isSpectator?: boolean;
 }
 

@@ -1,3 +1,5 @@
+import { CardValue } from '../types';
+
 export type ConnectionStatus = 'initial' | 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
 export interface QueuedEvent {
@@ -31,6 +33,12 @@ export enum ClientEvents {
   STORY_ACTIVATE = 'story:activate',
   TIMER_START = 'timer:start',
   TIMER_STOP = 'timer:stop',
+  TIMER_PAUSE = 'timer:pause',
+  TIMER_RESUME = 'timer:resume',
+  TIMER_RESET = 'timer:reset',
+  TIMER_ADD_TIME = 'timer:add_time',
+  TIMER_ADJUST = 'timer:adjust',
+  TIMER_CONFIGURE = 'timer:configure',
   HEARTBEAT = 'heartbeat'
 }
 
@@ -79,7 +87,7 @@ export interface VoteResult {
 
 export interface ConsensusData {
   hasConsensus: boolean;
-  suggestedValue?: string;
+  suggestedValue?: CardValue;
   averageValue?: number;
   deviation?: number;
 }
@@ -91,13 +99,24 @@ export interface StoryInfo {
   finalEstimate?: string;
   orderIndex: number;
   isActive: boolean;
+  createdAt: string;
+  completedAt?: string;
 }
 
 export interface TimerState {
-  isRunning: boolean;
+  mode: 'countdown' | 'stopwatch' | 'none';
   duration: number;
-  remainingTime: number;
-  startedAt?: Date;
+  remaining: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  startedAt: number | null;
+  pausedAt: number | null;
+  settings: {
+    autoReveal: boolean;
+    autoSkip: boolean;
+    audioEnabled: boolean;
+    warningAt: number[];
+  };
 }
 
 // Legacy interfaces for backward compatibility
@@ -143,6 +162,12 @@ export interface SessionStateData {
   stories: StoryInfo[];
   currentStory?: StoryInfo;
   timer?: TimerState;
+  config: {
+    cardValues: string[];
+    allowSpectators: boolean;
+    autoRevealCards: boolean;
+    timerSeconds: number;
+  };
 }
 
 // Client event payload types (matching backend)
@@ -197,8 +222,26 @@ export interface ClientEventPayloads {
   };
   [ClientEvents.TIMER_START]: {
     duration: number;
+    mode?: 'countdown' | 'stopwatch';
   };
   [ClientEvents.TIMER_STOP]: Record<string, never>;
+  [ClientEvents.TIMER_PAUSE]: Record<string, never>;
+  [ClientEvents.TIMER_RESUME]: Record<string, never>;
+  [ClientEvents.TIMER_RESET]: Record<string, never>;
+  [ClientEvents.TIMER_ADD_TIME]: {
+    seconds: number;
+  };
+  [ClientEvents.TIMER_ADJUST]: {
+    adjustmentSeconds: number;
+  };
+  [ClientEvents.TIMER_CONFIGURE]: {
+    settings: {
+      enableWarning: boolean;
+      warningThreshold: number;
+      enableSound: boolean;
+      autoReveal: boolean;
+    };
+  };
   [ClientEvents.PLAYER_REMOVE]: {
     playerId: string;
   };

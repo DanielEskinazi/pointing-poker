@@ -1,5 +1,12 @@
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
+import { 
+  calculateVoteDistribution, 
+  calculateVotingStatistics, 
+  calculateMedianPosition,
+  formatMetricsDisplay,
+  type VoteDistributionData 
+} from '../utils/votingStats';
 
 export const VotingResults = () => {
   const { 
@@ -15,36 +22,11 @@ export const VotingResults = () => {
 
   const { votingResults, consensus } = voting;
 
-  // Group votes by value for statistics
-  const votesByValue = votingResults.reduce((acc, vote) => {
-    const value = vote.value.toString();
-    if (!acc[value]) {
-      acc[value] = [];
-    }
-    acc[value].push(vote);
-    return acc;
-  }, {} as Record<string, typeof votingResults>);
+  // Calculate enhanced distribution and statistics
+  const distributionData = calculateVoteDistribution(votingResults);
+  const statistics = calculateVotingStatistics(votingResults);
+  const medianPosition = calculateMedianPosition(votingResults, distributionData);
 
-  // Calculate statistics for numeric votes
-  const numericVotes = votingResults
-    .map(v => v.value)
-    .filter(v => typeof v === 'number') as number[];
-
-  const hasNumericVotes = numericVotes.length > 0;
-  
-  let statistics = null;
-  if (hasNumericVotes) {
-    const sum = numericVotes.reduce((a, b) => a + b, 0);
-    const average = sum / numericVotes.length;
-    const sorted = [...numericVotes].sort((a, b) => a - b);
-    const median = sorted.length % 2 === 0
-      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-      : sorted[Math.floor(sorted.length / 2)];
-    const min = Math.min(...numericVotes);
-    const max = Math.max(...numericVotes);
-
-    statistics = { average, median, min, max };
-  }
 
   return (
     <motion.div
@@ -64,8 +46,8 @@ export const VotingResults = () => {
         {/* Individual Votes */}
         <div className="mb-6">
           <h4 className="text-lg font-semibold text-gray-800 mb-4">Individual Votes</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {votingResults.map((vote) => {
+          <div className="flex flex-col gap-0.5 max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+            {votingResults.map((vote, index) => {
               const player = players.find(p => p.id === vote.playerId);
               const playerName = player?.name || 'Unknown Player';
               
@@ -74,16 +56,20 @@ export const VotingResults = () => {
                   key={vote.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border"
+                  transition={{ delay: index * 0.05 }}
+                  className={`flex items-center justify-between px-3 py-2 min-h-[48px] transition-colors duration-200 hover:bg-gray-100 ${
+                    index % 2 === 1 ? 'bg-gray-50' : 'bg-white'
+                  }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-500 text-white rounded-full flex items-center justify-center font-medium">
+                    <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
                       {player?.avatar || playerName.charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-medium text-gray-900">{playerName}</span>
+                    <span className="font-medium text-gray-900 text-sm truncate max-w-[120px] md:max-w-none">
+                      {playerName}
+                    </span>
                   </div>
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-lg font-bold text-gray-900 flex-shrink-0">
                     {vote.value}
                   </div>
                 </motion.div>
@@ -92,49 +78,103 @@ export const VotingResults = () => {
           </div>
         </div>
 
-        {/* Vote Distribution */}
+        {/* Enhanced Vote Distribution */}
         <div className="mb-6">
-          <h4 className="text-lg font-semibold text-gray-800 mb-4">Vote Distribution</h4>
-          <div className="space-y-3">
-            {Object.entries(votesByValue)
-              .sort(([a], [b]) => {
-                // Sort by numeric value if possible, otherwise alphabetically
-                const numA = Number(a);
-                const numB = Number(b);
-                if (!isNaN(numA) && !isNaN(numB)) {
-                  return numA - numB;
-                }
-                return a.localeCompare(b);
-              })
-              .map(([value, votes]) => {
-                const percentage = (votes.length / votingResults.length) * 100;
-                
-                return (
-                  <div key={value} className="flex items-center gap-4">
-                    <div className="w-16 text-xl font-bold text-gray-700 text-center">
-                      {value}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-600">
-                          {votes.length} {votes.length === 1 ? 'vote' : 'votes'}
-                        </span>
-                        <span className="text-sm font-medium text-gray-700">
-                          {Math.round(percentage)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <motion.div
-                          className="bg-blue-500 h-2 rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${percentage}%` }}
-                          transition={{ duration: 0.8, delay: 0.2 }}
-                        />
-                      </div>
-                    </div>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-800">Vote Distribution</h4>
+            {statistics && (
+              <div className="text-xs text-gray-600 font-mono">
+                {formatMetricsDisplay(statistics)}
+              </div>
+            )}
+          </div>
+          
+          <div className="relative">
+            {/* Median indicator line */}
+            {medianPosition >= 0 && statistics && statistics.median > 0 && (
+              <div 
+                className="absolute top-0 w-0.5 bg-indigo-500 z-10 rounded-full"
+                style={{ 
+                  left: `${medianPosition}%`,
+                  height: `${distributionData.length * 48 + 16}px`,
+                  transform: 'translateX(-50%)'
+                }}
+                title={`Median: ${statistics.median} points`}
+              />
+            )}
+            
+            <div className="space-y-2">
+              {distributionData.map((item, index) => (
+                <motion.div
+                  key={item.value}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`distribution-row grid grid-cols-[40px_1fr_40px_50px] gap-3 items-center py-2 px-3 rounded-lg transition-colors hover:bg-gray-50 ${
+                    item.isMode ? 'bg-indigo-100 border border-indigo-300 shadow-sm' : ''
+                  }`}
+                >
+                  {/* Vote Value */}
+                  <div className="text-xl font-bold text-gray-700 text-center">
+                    {item.value}
                   </div>
-                );
-              })}
+                  
+                  {/* Progress Bar */}
+                  <div className="relative">
+                    <div className="w-full bg-gray-200 rounded-lg h-6 overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-lg transition-all duration-300"
+                        style={{ backgroundColor: item.spreadColor }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.percentage}%` }}
+                        transition={{ duration: 0.8, delay: index * 0.1 }}
+                      />
+                    </div>
+                    {item.isMedian && (
+                      <div className="absolute top-0 right-0 text-xs text-indigo-600 font-medium">
+                        M
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Count */}
+                  <div className="text-sm font-medium text-gray-900 text-center">
+                    {item.count}
+                  </div>
+                  
+                  {/* Percentage */}
+                  <div className="text-sm font-medium text-gray-700 text-right">
+                    {item.percentage}%
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Legend */}
+          <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-600">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-green-500 rounded"></div>
+              <span>Consensus</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-amber-500 rounded"></div>
+              <span>Small spread</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-red-500 rounded"></div>
+              <span>Large spread</span>
+            </div>
+            {medianPosition >= 0 && statistics && statistics.median > 0 && (
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-0.5 bg-indigo-500 rounded"></div>
+                <span>Median</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"></div>
+              <span>Most common</span>
+            </div>
           </div>
         </div>
 

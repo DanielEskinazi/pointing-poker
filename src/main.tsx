@@ -21,6 +21,15 @@ const queryClient = new QueryClient({
 // Setup global error handlers
 setupGlobalErrorHandlers();
 
+// Expose debug utilities in development
+if (process.env.NODE_ENV === 'development') {
+  import('./store/actions/auth').then(({ authActions }) => {
+    (window as unknown as { clearPersistenceData: () => Promise<void> }).clearPersistenceData = authActions.clearAllPersistenceData;
+    console.log('🛠️ Debug utilities available:');
+    console.log('  window.clearPersistenceData() - Clear all stored data');
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

@@ -89,6 +89,7 @@ export function JoinGame({ sessionId, tabId, onJoin }: JoinGameProps) {
           <input
             type="text"
             id="name"
+            data-testid="player-name-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -121,6 +122,7 @@ export function JoinGame({ sessionId, tabId, onJoin }: JoinGameProps) {
         </div>
         <button
           type="submit"
+          data-testid="join-game-button"
           className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
           disabled={isJoining}
         >

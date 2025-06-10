@@ -13,14 +13,17 @@ import {
   VoteResult,
   ConsensusData
 } from './events';
+import { TimerService } from '../services/timer.service';
 
 export class ConnectionManager {
   private redisState: RedisStateManager;
   private rateLimiter: WebSocketRateLimiter;
+  private timerService: TimerService;
 
   constructor(redisState: RedisStateManager, rateLimiter: WebSocketRateLimiter) {
     this.redisState = redisState;
     this.rateLimiter = rateLimiter;
+    this.timerService = TimerService.getInstance(redisState);
   }
 
   async handleConnection(socket: Socket, io: Server): Promise<void> {
@@ -281,6 +284,30 @@ export class ConnectionManager {
 
     socket.on(ClientEvents.TIMER_STOP, async () => {
       await this.handleTimerStop(socket, io, connection);
+    });
+
+    socket.on(ClientEvents.TIMER_PAUSE, async () => {
+      await this.handleTimerPause(socket, io, connection);
+    });
+
+    socket.on(ClientEvents.TIMER_RESUME, async () => {
+      await this.handleTimerResume(socket, io, connection);
+    });
+
+    socket.on(ClientEvents.TIMER_RESET, async () => {
+      await this.handleTimerReset(socket, io, connection);
+    });
+
+    socket.on(ClientEvents.TIMER_ADD_TIME, async (data: ClientEventPayloads[ClientEvents.TIMER_ADD_TIME]) => {
+      await this.handleTimerAddTime(socket, io, connection, data);
+    });
+
+    socket.on(ClientEvents.TIMER_ADJUST, async (data: ClientEventPayloads[ClientEvents.TIMER_ADJUST]) => {
+      await this.handleTimerAdjust(socket, io, connection, data);
+    });
+
+    socket.on(ClientEvents.TIMER_CONFIGURE, async (data: ClientEventPayloads[ClientEvents.TIMER_CONFIGURE]) => {
+      await this.handleTimerConfigure(socket, io, connection, data);
     });
   }
 
@@ -584,23 +611,30 @@ export class ConnectionManager {
 
   private async handleTimerStart(
     socket: Socket, 
-    io: Server, 
+    _io: Server, 
     connection: SocketConnection, 
     data: ClientEventPayloads[ClientEvents.TIMER_START]
   ): Promise<void> {
     try {
-      const timerState = {
-        isRunning: true,
-        duration: data.duration,
-        remainingTime: data.duration,
-        startedAt: new Date()
-      };
-
-      await this.redisState.updateSessionState(connection.sessionId, {
-        timer: timerState
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
       });
 
-      io.to(`session:${connection.sessionId}`).emit(ServerEvents.TIMER_UPDATED, {
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.startTimer(
+        connection.sessionId, 
+        data.duration, 
+        data.mode || 'countdown'
+      );
+
+      // Timer service will emit timer:updated event, but we also update session state
+      await this.redisState.updateSessionState(connection.sessionId, {
         timer: timerState
       });
 
@@ -612,23 +646,28 @@ export class ConnectionManager {
 
   private async handleTimerStop(
     socket: Socket, 
-    io: Server, 
+    _io: Server, 
     connection: SocketConnection
   ): Promise<void> {
     try {
-      const timerState = {
-        isRunning: false,
-        duration: 0,
-        remainingTime: 0
-      };
-
-      await this.redisState.updateSessionState(connection.sessionId, {
-        timer: timerState
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
       });
 
-      io.to(`session:${connection.sessionId}`).emit(ServerEvents.TIMER_UPDATED, {
-        timer: timerState
-      });
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.stopTimer(connection.sessionId);
+      
+      if (timerState) {
+        await this.redisState.updateSessionState(connection.sessionId, {
+          timer: timerState
+        });
+      }
 
     } catch (error) {
       logger.error('Timer stop error:', error);
@@ -919,11 +958,17 @@ export class ConnectionManager {
     const currentStory = stories.find(s => s.isActive);
     const cachedState = await this.redisState.getSessionState(sessionId);
 
+    // Ensure timer state is loaded and cached
+    let timerState = cachedState?.timer;
+    if (!timerState) {
+      timerState = await this.timerService.loadTimerState(sessionId) || undefined;
+    }
+
     return {
       players: players.map(p => this.mapPlayerToInfo(p, session?.hostId)),
       stories: stories.map(s => this.mapStoryToInfo(s)),
       currentStory: currentStory ? this.mapStoryToInfo(currentStory) : undefined,
-      timer: cachedState?.timer,
+      timer: timerState,
       votesRevealed: cachedState?.votesRevealed || false
     };
   }
@@ -990,5 +1035,213 @@ export class ConnectionManager {
     }
 
     return { hasConsensus: false };
+  }
+
+  private async handleTimerPause(
+    socket: Socket, 
+    _io: Server, 
+    connection: SocketConnection
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.pauseTimer(connection.sessionId);
+      
+      if (timerState) {
+        await this.redisState.updateSessionState(connection.sessionId, {
+          timer: timerState
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer pause error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to pause timer' });
+    }
+  }
+
+  private async handleTimerResume(
+    socket: Socket, 
+    _io: Server, 
+    connection: SocketConnection
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.resumeTimer(connection.sessionId);
+      
+      if (timerState) {
+        await this.redisState.updateSessionState(connection.sessionId, {
+          timer: timerState
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer resume error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to resume timer' });
+    }
+  }
+
+  private async handleTimerReset(
+    socket: Socket, 
+    _io: Server, 
+    connection: SocketConnection
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.resetTimer(connection.sessionId);
+      
+      if (timerState) {
+        await this.redisState.updateSessionState(connection.sessionId, {
+          timer: timerState
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer reset error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to reset timer' });
+    }
+  }
+
+  private async handleTimerAddTime(
+    socket: Socket, 
+    _io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.TIMER_ADD_TIME]
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.addTime(connection.sessionId, data.seconds);
+      
+      if (timerState) {
+        await this.redisState.updateSessionState(connection.sessionId, {
+          timer: timerState
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer add time error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to add time to timer' });
+    }
+  }
+
+  private async handleTimerAdjust(
+    socket: Socket, 
+    io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.TIMER_ADJUST]
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (!session || session.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only the host can adjust the timer' });
+        return;
+      }
+
+      // Rate limiting check
+      const rateLimitResult = await this.rateLimiter.check(connection.socketId, ClientEvents.TIMER_ADJUST);
+      if (!rateLimitResult.allowed) {
+        socket.emit(ServerEvents.RATE_LIMIT_EXCEEDED, { 
+          event: 'timer:adjust', 
+          retryAfter: rateLimitResult.retryAfter || 10 
+        });
+        return;
+      }
+
+      // Adjust timer
+      const updatedTimer = await this.timerService.adjustTimer(connection.sessionId, data.adjustmentSeconds);
+      
+      if (updatedTimer) {
+        // Broadcast to all session members
+        io.to(`session:${connection.sessionId}`).emit(ServerEvents.TIMER_UPDATED, {
+          timer: updatedTimer
+        });
+
+        logger.info('Timer adjusted', { 
+          sessionId: connection.sessionId,
+          playerId: connection.playerId,
+          adjustmentSeconds: data.adjustmentSeconds,
+          newTimeRemaining: updatedTimer.remainingTime
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer adjust error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to adjust timer' });
+    }
+  }
+
+  private async handleTimerConfigure(
+    socket: Socket, 
+    _io: Server, 
+    connection: SocketConnection, 
+    data: ClientEventPayloads[ClientEvents.TIMER_CONFIGURE]
+  ): Promise<void> {
+    try {
+      // Check if user is host (only host can control timer)
+      const session = await db.getPrisma().session.findUnique({
+        where: { id: connection.sessionId },
+        select: { hostId: true }
+      });
+
+      if (session?.hostId !== connection.playerId) {
+        socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Only host can control timer' });
+        return;
+      }
+
+      const timerState = await this.timerService.configureTimer(connection.sessionId, data.settings);
+      
+      if (timerState) {
+        await this.redisState.updateSessionState(connection.sessionId, {
+          timer: timerState
+        });
+      }
+
+    } catch (error) {
+      logger.error('Timer configure error:', error);
+      socket.emit(ServerEvents.CONNECTION_ERROR, { error: 'Failed to configure timer' });
+    }
   }
 }
