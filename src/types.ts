@@ -137,6 +137,7 @@ export interface StoryData {
 export interface CreateStoryDto {
   title: string;
   description?: string;
+  orderIndex?: number;
 }
 
 export interface UpdateStoryDto {
@@ -174,7 +175,6 @@ export interface CreateSessionDto {
   name: string;
   hostName: string;
   hostAvatar?: string;
-  password?: string;
   config?: {
     cardValues: string[];
     allowSpectators?: boolean;

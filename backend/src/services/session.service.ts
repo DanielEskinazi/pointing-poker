@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import bcrypt from 'bcrypt';
 import { db } from '../database';
 import { generateToken } from '../utils/auth';
 import { logger } from '../utils/logger';
@@ -36,7 +35,6 @@ export const setWebSocketServerForSession = (server: WebSocketServer): void => {
 };
 
 export class SessionService {
-  private readonly SALT_ROUNDS = 10;
   private readonly SESSION_EXPIRY_HOURS = 48;
 
   async createSession(data: CreateSessionDto): Promise<CreateSessionResponse> {
@@ -44,10 +42,6 @@ export class SessionService {
       const sessionId = uuidv4();
       const hostId = uuidv4();
       
-      // Hash password if provided
-      const passwordHash = data.password 
-        ? await bcrypt.hash(data.password, this.SALT_ROUNDS)
-        : null;
 
       // Calculate expiry date
       const expiresAt = new Date(Date.now() + this.SESSION_EXPIRY_HOURS * 60 * 60 * 1000);
@@ -57,7 +51,6 @@ export class SessionService {
         data: {
           id: sessionId,
           name: data.name,
-          passwordHash,
           config: data.config as unknown as Prisma.InputJsonValue,
           expiresAt,
           isActive: true
@@ -246,15 +239,6 @@ export class SessionService {
         throw new Error('Session has expired');
       }
 
-      // Verify password if required
-      if (session.passwordHash && data.password) {
-        const validPassword = await bcrypt.compare(data.password, session.passwordHash);
-        if (!validPassword) {
-          throw new Error('Invalid password');
-        }
-      } else if (session.passwordHash && !data.password) {
-        throw new Error('Password required');
-      }
 
       // Create new player - duplicates names are allowed, avatars provide visual distinction
       logger.info('Creating new player in database', { sessionId, name: data.name });

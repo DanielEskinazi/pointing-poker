@@ -16,7 +16,6 @@ export const authActions = {
       // - Clear React Query cache
       // - Invalidate any tokens
 
-      console.log("Logout completed successfully");
 
       // Redirect to home
       window.location.href = "/";
@@ -42,7 +41,6 @@ export const authActions = {
           const data = JSON.parse(localStorage.getItem(key) || "{}");
           if (data.timestamp && Date.now() - data.timestamp > EXPIRY_TIME) {
             localStorage.removeItem(key);
-            console.log("Removed expired session:", key);
           }
         } catch {
           // If we can't parse the data, remove it
@@ -72,10 +70,6 @@ export const authActions = {
               expiredRecords.forEach((record) => {
                 deleteStore.delete(record.id);
               });
-              console.log(
-                "Cleaned up expired IndexedDB records:",
-                expiredRecords.length
-              );
             }
           };
         };
@@ -101,7 +95,6 @@ export const authActions = {
   // Debug utility to force clear all persistence data
   clearAllPersistenceData: async () => {
     try {
-      console.log('🧹 Clearing all persistence data...');
       
       // Clear all localStorage data related to planning poker
       const allKeys = Object.keys(localStorage);
@@ -113,7 +106,6 @@ export const authActions = {
       
       planningPokerKeys.forEach(key => {
         localStorage.removeItem(key);
-        console.log('Removed localStorage key:', key);
       });
       
       // Clear IndexedDB
@@ -123,7 +115,6 @@ export const authActions = {
           const db = dbRequest.result;
           const tx = db.transaction(['state'], 'readwrite');
           tx.objectStore('state').clear();
-          console.log('Cleared IndexedDB state');
         };
       } catch (error) {
         console.error('Failed to clear IndexedDB:', error);
@@ -132,8 +123,6 @@ export const authActions = {
       // Also clear the main persistence state
       await clearPersistedState();
       
-      console.log('✅ All persistence data cleared successfully');
-      console.log('💡 You can call window.clearPersistenceData() to run this again');
       
     } catch (error) {
       console.error('Failed to clear persistence data:', error);

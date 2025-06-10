@@ -107,7 +107,6 @@ export class PersistenceManager {
       }
       
       if (Date.now() - data.timestamp > this.MAX_AGE) {
-        console.info('Persisted state expired, clearing old data');
         this.clear();
         return null;
       }

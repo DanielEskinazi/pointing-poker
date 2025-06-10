@@ -128,7 +128,6 @@ export const persist: Persist = (config, options) => (set, get, api) => {
       // Clear any corrupt persistence data
       try {
         await persistenceManager.clear();
-        console.log("Cleared corrupt persistence data");
       } catch (clearError) {
         console.error("Failed to clear corrupt persistence:", clearError);
       }

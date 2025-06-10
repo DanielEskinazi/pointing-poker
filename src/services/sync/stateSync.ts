@@ -12,8 +12,7 @@ export class StateSync {
     try {
       // In a client-side only app, we don't have a server to sync with
       // This would be used in a full-stack implementation
-      // For now, we'll just log that sync was attempted
-      console.log("State sync attempted for session:", sessionId);
+      // State sync is handled via WebSocket real-time updates
 
       // In a real implementation, you would:
       // 1. Fetch latest session state from server
@@ -127,7 +126,7 @@ export class StateSync {
       // For now, just update the last sync time
       useGameStore.getState().updateLastSync();
 
-      console.log("Sync completed for session:", sessionId);
+      // Sync completed successfully
     } catch (error) {
       console.error("Sync failed:", error);
       throw error;

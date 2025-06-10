@@ -8,12 +8,11 @@ export class SessionController {
 
   create = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { name, hostName, hostAvatar, password, config } = req.body;
+      const { name, hostName, hostAvatar, config } = req.body;
       
       // Create session with host as first player
       const result = await this.sessionService.createSession({
         name,
-        password,
         config,
         host: {
           name: hostName,
@@ -105,12 +104,11 @@ export class SessionController {
   join = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id: sessionId } = req.params;
-      const { playerName, avatar, password, asSpectator } = req.body;
+      const { playerName, avatar, asSpectator } = req.body;
 
       const result = await this.sessionService.joinSession(sessionId, {
         name: playerName,
         avatar,
-        password,
         isSpectator: asSpectator
       });
 
@@ -173,13 +171,6 @@ export class SessionController {
       return;
     }
 
-    if (errorMessage === 'Invalid password' || errorMessage === 'Password required') {
-      res.status(401).json({
-        success: false,
-        error: errorMessage
-      });
-      return;
-    }
 
     if (errorMessage === 'Name already taken') {
       res.status(409).json({

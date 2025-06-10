@@ -1284,7 +1284,7 @@ export const useGameStore = create<GameStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          console.log("State rehydrated successfully");
+          // State rehydrated successfully
         }
       },
     }

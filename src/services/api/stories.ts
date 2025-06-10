@@ -10,7 +10,6 @@ export const storiesApi = {
       `/sessions/${sessionId}/stories`,
       storyData
     );
-    console.log('Story API response:', response);
     
     // The response is ApiResponse<Story>, so we need to access data
     if (!response || !response.data) {

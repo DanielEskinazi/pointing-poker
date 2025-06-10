@@ -1,3 +1,5 @@
+import { CardValue } from '../types';
+
 export type ConnectionStatus = 'initial' | 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
 export interface QueuedEvent {
@@ -85,7 +87,7 @@ export interface VoteResult {
 
 export interface ConsensusData {
   hasConsensus: boolean;
-  suggestedValue?: string;
+  suggestedValue?: CardValue;
   averageValue?: number;
   deviation?: number;
 }
@@ -97,22 +99,23 @@ export interface StoryInfo {
   finalEstimate?: string;
   orderIndex: number;
   isActive: boolean;
+  createdAt: string;
+  completedAt?: string;
 }
 
 export interface TimerState {
   mode: 'countdown' | 'stopwatch' | 'none';
+  duration: number;
+  remaining: number;
   isRunning: boolean;
   isPaused: boolean;
-  duration: number;
-  remainingTime: number;
-  startedAt?: Date;
-  pausedAt?: Date;
-  pausedDuration: number;
+  startedAt: number | null;
+  pausedAt: number | null;
   settings: {
-    enableWarning: boolean;
-    warningThreshold: number;
-    enableSound: boolean;
     autoReveal: boolean;
+    autoSkip: boolean;
+    audioEnabled: boolean;
+    warningAt: number[];
   };
 }
 
@@ -159,6 +162,12 @@ export interface SessionStateData {
   stories: StoryInfo[];
   currentStory?: StoryInfo;
   timer?: TimerState;
+  config: {
+    cardValues: string[];
+    allowSpectators: boolean;
+    autoRevealCards: boolean;
+    timerSeconds: number;
+  };
 }
 
 // Client event payload types (matching backend)
